@@ -56,8 +56,11 @@ CC_c_target = bfin-uclinux-gcc -std=gnu99 $(CFLAGS_target)
 CC_cpp_host = g++  $(CFLAGS_host)
 CC_cpp_target = bfin-uclinux-g++  $(CFLAGS_target)
 
-LD_host := g++ -fPIC
-LD_target := bfin-uclinux-g++ -elf2flt="-s 1048576"
+LD_c_host := gcc -fPIC
+LD_c_target := bfin-uclinux-gcc -elf2flt="-s 1048576"
+
+LD_cpp_host := g++ -fPIC
+LD_cpp_target := bfin-uclinux-g++ -elf2flt="-s 1048576"
 
 LIBS_host := oscar/library/libosc_host
 LIBS_target := oscar/library/libosc_target
@@ -98,6 +101,12 @@ oscar/%:
 # Including depency files and optional local Makefile.
 -include build/*.d
 
+# Makefiles and other files all build products should depend on.
+PRODUCT_DEPS := $(filter-out %.d, $(MAKEFILE_LIST))
+
+# Do not try to rebuild any of the makefile.
+$(MAKEFILE_LIST):;
+
 # Build targets.
 define BUILD
 BASENAME_$(1) := $(patsubst %.c, %, $(patsubst %.cpp, %, $(1)))
@@ -105,24 +114,31 @@ OBJECT_$(1)_host := $(patsubst %, build/%_host.o, $$(BASENAME_$(1)))
 OBJECT_$(1)_target := $(patsubst %, build/%_target.o, $$(BASENAME_$(1)))
 SUFFIX_$(1) := $(lastword $(subst ., ,$(1)))
 
-$$(OBJECT_$(1)_host): $(1) $(filter-out %.d, $(MAKEFILE_LIST))
+$$(OBJECT_$(1)_host): $(1) $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
 	$$(CC_$$(SUFFIX_$(1))_host) -MD $$< -o $$@
-	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s/^.*$$$$/$$(subst /, \/, $$@): \0\n\0:/' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
-$$(OBJECT_$(1)_target): $(1) $(filter-out %.d, $(MAKEFILE_LIST))
+	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
+$$(OBJECT_$(1)_target): $(1) $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
 	$$(CC_$$(SUFFIX_$(1))_target) -MD $$< -o $$@
-	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s/^.*$$$$/$$(subst /, \/, $$@): \0\n\0:/' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
+	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
 endef
 
 # Link targets.
 define LINK
-$(foreach i, $(SOURCES_$(i)), $(eval $(call BUILD,$i)))
+$(foreach i, $(SOURCES_$(1)), $(eval $(call BUILD,$i)))
 
-$(1)_host: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_host)) $(LIBS_host)
-	$(LD_host) -o $$@ $$^ -lstdc++
-$(1)_target: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_target)) $(LIBS_target)
-	$(LD_target) -o $$@ $$^ -lm -lbfdsp -lstdc++
+# Here we decide wether to use the c or c++ linker.
+ifneq '' '$(filter cpp, $(foreach i, $(SOURCES_$(1)), $(SUFFIX_$(i))))'
+SUFFIX_$(1) := cpp
+else
+SUFFIX_$(1) := c
+endif
+
+$(1)_host: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_host)) $(LIBS_host) $(PRODUCT_DEPS)
+	$$(LD_$$(SUFFIX_$(1))_host) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^)
+$(1)_target: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_target)) $(LIBS_target) $(PRODUCT_DEPS)
+	$$(LD_$$(SUFFIX_$(1))_target) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^) -lm -lbfdsp
 endef
 $(foreach i, $(APPS), $(eval $(call LINK,$i)))
 
@@ -130,6 +146,6 @@ cgi/www.tar.gz: cgi/template.cgi_target $(shell find cgi/www)
 	cp $< cgi/www/cgi-bin/template.cgi
 	tar c -C cgi/www . | gzip > $@
 
-# Cleans the module.
+# Cleans the application.
 clean:
 	rm -rf build $(APPS) cgi/www.tar.gz
