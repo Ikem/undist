@@ -1,16 +1,16 @@
 /*	A collection of example applications for the LeanXcam platform.
 	Copyright (C) 2008 Supercomputing Systems AG
-	
+
 	This library is free software; you can redistribute it and/or modify it
 	under the terms of the GNU Lesser General Public License as published by
 	the Free Software Foundation; either version 2.1 of the License, or (at
 	your option) any later version.
-	
+
 	This library is distributed in the hope that it will be useful, but
 	WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser
 	General Public License for more details.
-	
+
 	You should have received a copy of the GNU Lesser General Public License
 	along with this library; if not, write to the Free Software Foundation,
 	Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -58,7 +58,7 @@ struct IPC_DATA
 	struct OSC_IPC_REQUEST req;
 	/*! @brief The state of above IPC request. */
 	enum EnIpcRequestState enReqState;
-	
+
 	/*! @brief All the information requested by the web interface is gathered
 	 * here. */
 	struct APPLICATION_STATE state;
@@ -72,12 +72,12 @@ struct TEMPLATE
 	uint8 u8FrameBuffers[NR_FRAME_BUFFERS][OSC_CAM_MAX_IMAGE_HEIGHT*OSC_CAM_MAX_IMAGE_WIDTH];
 	/*! @brief A buffer to hold the resulting color image. */
 	uint8 u8ResultImage[3*OSC_CAM_MAX_IMAGE_WIDTH*OSC_CAM_MAX_IMAGE_HEIGHT];
-	
+
 	/*! @brief Handle to the framework instance. */
 	void *hFramework;
 	/*! @brief Camera-Scene perspective */
 	enum EnOscCamPerspective perspective;
-	
+
 #if defined(OSC_HOST) || defined(OSC_SIM)
 	/*! @brief File name reader for camera images on the host. */
 	void *hFileNameReader;
@@ -95,26 +95,26 @@ extern struct TEMPLATE data;
 /*-------------------------- Functions --------------------------------*/
 /*********************************************************************//*!
  * @brief Unload everything before exiting.
- * 
+ *
  * @return SUCCESS or an appropriate error code.
  *//*********************************************************************/
 OSC_ERR Unload();
 
 /*********************************************************************//*!
  * @brief Give control to statemachine.
- * 
+ *
  * @return SUCCESS or an appropriate error code otherwise
- * 
+ *
  * The function does never return normally except in error case.
  *//*********************************************************************/
 OSC_ERR StateControl(void);
 
 /*********************************************************************//*!
  * @brief Handle any incoming IPC requests.
- * 
+ *
  * Check for incoming IPC requests and return the corresponding parameter
  * ID if there is a request available.
- * 
+ *
  * @param pParamId Pointer to the variable where the parameter ID is
  * stored in case of success.
  * @return SUCCESS, -ENO_MSG_AVAILABLE or an appropriate error code.
@@ -123,10 +123,10 @@ OSC_ERR CheckIpcRequests(uint32 *pParamId);
 
 /*********************************************************************//*!
  * @brief Acknowledge any pending IPC requests.
- * 
+ *
  * It may take several calls to this function for an acknowledge to
  * succeed.
- * 
+ *
  * @return SUCCESS or an appropriate error code.
  *//*********************************************************************/
 OSC_ERR AckIpcRequests();
@@ -134,7 +134,7 @@ OSC_ERR AckIpcRequests();
 /*********************************************************************//*!
  * @brief Write an image of type fract16 to the result pointer of
  * the current request.
- * 
+ *
  * @param f16Image The image to be sent.
  * @param nPixels The number of pixels in the image.
  *//*********************************************************************/
@@ -142,13 +142,22 @@ void IpcSendImage(fract16 *f16Image, uint32 nPixels);
 
 /*********************************************************************//*!
  * @brief Process a newly captured frame.
- * 
+ *
  * In the case of this template, this consists just of debayering the
  * image and writing the result to the result image buffer. This should
  * be the starting point where you add your code.
- * 
+ *
  * @param pRawImg The raw image to process.
  *//*********************************************************************/
 void ProcessFrame(uint8 *pRawImg);
+
+
+/*********************************************************************//*!
+ * @brief OpenCV demo application
+ *
+ *
+ * @return Error code
+ *//*********************************************************************/
+int mainDemo(void);
 
 #endif /*TEMPLATE_H_*/
