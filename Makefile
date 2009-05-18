@@ -117,11 +117,11 @@ SUFFIX_$(1) := $(lastword $(subst ., ,$(1)))
 $$(OBJECT_$(1)_host): $(1) $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
 	$$(CC_$$(SUFFIX_$(1))_host) -MD $$< -o $$@
-	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s/^.*$$$$/$$(subst /, \/, $$@): \0\n\0:/' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
+	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
 $$(OBJECT_$(1)_target): $(1) $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
 	$$(CC_$$(SUFFIX_$(1))_target) -MD $$< -o $$@
-	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s/^.*$$$$/$$(subst /, \/, $$@): \0\n\0:/' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
+	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
 endef
 
 # Link targets.
