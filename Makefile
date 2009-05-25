@@ -99,7 +99,7 @@ oscar/%:
 	$(MAKE) -C oscar $*
 
 # Including depency files and optional local Makefile.
--include build/*.d
+-include $(shell find build -name *.d)
 
 # Makefiles and other files all build products should depend on.
 PRODUCT_DEPS := $(filter-out %.d, $(MAKEFILE_LIST))
