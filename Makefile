@@ -59,24 +59,27 @@ CC_c_target = bfin-uclinux-gcc -std=gnu99 $(CFLAGS_target)
 CC_cpp_host = g++  $(CFLAGS_host)
 CC_cpp_target = bfin-uclinux-g++  $(CFLAGS_target)
 
-LD_c_host := gcc -fPIC $(LFLAGS)
-LD_c_target := bfin-uclinux-gcc -elf2flt="-s 1048576" $(LFLAGS)
+LD_host := gcc -fPIC
+LD_target := bfin-uclinux-gcc -elf2flt="-s 1048576"
 
-LD_cpp_host := g++ -fPIC $(LFLAGS)
-LD_cpp_target := bfin-uclinux-g++ -elf2flt="-s 1048576" $(LFLAGS)
-
-LIBS_host := oscar/library/libosc_host
-LIBS_target := oscar/library/libosc_target
+ARS_host := oscar/library/libosc_host
+ARS_target := oscar/library/libosc_target
 ifeq 'CONFIG_ENABLE_DEBUG' 'y'
-LIBS_host := $(LIBS_host)_dbg
-LIBS_target := $(LIBS_target)_dbg
+ARS_host := $(ARS_host)_dbg
+ARS_target := $(ARS_target)_dbg
 endif
 ifeq 'CONFIG_ENABLE_SIMULATION' 'y'
-LIBS_host := $(LIBS_host)_sim
-LIBS_target := $(LIBS_target)_sim
+ARS_host := $(ARS_host)_sim
+ARS_target := $(ARS_target)_sim
 endif
-LIBS_host := $(LIBS_host).a
-LIBS_target := $(LIBS_target).a
+ARS_host := $(ARS_host).a
+ARS_target := $(ARS_target).a
+
+ARS_host += ../opencv-1.1.0-host/cv/src/.libs/libcv.a ../opencv-1.1.0-host/cxcore/src/.libs/libcxcore.a ../opencv-1.1.0-host/cv/src/.libs/libcv.a
+ARS_target += ../opencv-1.1.0/cv/src/.libs/libcv.a ../opencv-1.1.0/cxcore/src/.libs/libcxcore.a ../opencv-1.1.0/cv/src/.libs/libcv.a
+
+LIBS_host := m pthread
+LIBS_target := m bfdsp pthread
 
 .PHONY: all clean host target install deploy run reconfigure
 all: $(addsuffix _host, $(APPS)) $(addsuffix _target, $(APPS))
@@ -102,7 +105,7 @@ oscar/%:
 	$(MAKE) -C oscar $*
 
 # Including depency files and optional local Makefile.
--include build/*.d
+-include $(shell find build -name *.d)
 
 # Makefiles and other files all build products should depend on.
 PRODUCT_DEPS := $(filter-out %.d, $(MAKEFILE_LIST))
@@ -112,36 +115,33 @@ $(MAKEFILE_LIST):;
 
 # Build targets.
 define BUILD
-BASENAME_$(1) := $(patsubst %.c, %, $(patsubst %.cpp, %, $(1)))
-OBJECT_$(1)_host := $(patsubst %, build/%_host.o, $$(BASENAME_$(1)))
-OBJECT_$(1)_target := $(patsubst %, build/%_target.o, $$(BASENAME_$(1)))
-SUFFIX_$(1) := $(lastword $(subst ., ,$(1)))
+BASENAME_$1 := $(patsubst %.c, %, $(patsubst %.cpp, %, $1))
+OBJECT_$1_host := $(patsubst %, build/%_host.o, $$(BASENAME_$1))
+OBJECT_$1_target := $(patsubst %, build/%_target.o, $$(BASENAME_$1))
+SUFFIX_$1 := $(lastword $(subst ., ,$1))
 
-$$(OBJECT_$(1)_host): $(1) $(PRODUCT_DEPS)
+$$(OBJECT_$1_host): $1 $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
-	$$(CC_$$(SUFFIX_$(1))_host) -MD $$< -o $$@
+	$$(CC_$$(SUFFIX_$1)_host) -MD $$< -o $$@
 	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
-$$(OBJECT_$(1)_target): $(1) $(PRODUCT_DEPS)
+$$(OBJECT_$1_target): $1 $(PRODUCT_DEPS)
 	@ mkdir -p $$(dir $$@)
-	$$(CC_$$(SUFFIX_$(1))_target) -MD $$< -o $$@
+	$$(CC_$$(SUFFIX_$1)_target) -MD $$< -o $$@
 	@ grep -oE '[^ \\]+' < $$(@:.o=.d) | sed -r '/:$$$$/d; s|^.*$$$$|$$@: \0\n\0:|' > $$(@:.o=.d~) && mv -f $$(@:.o=.d){~,}
 endef
 
 # Link targets.
 define LINK
-$(foreach i, $(SOURCES_$(1)), $(eval $(call BUILD,$i)))
+$(foreach i, $(SOURCES_$1), $(eval $(call BUILD,$i)))
 
-# Here we decide wether to use the c or c++ linker.
-ifneq '' '$(filter cpp, $(foreach i, $(SOURCES_$(1)), $(SUFFIX_$(i))))'
-SUFFIX_$(1) := cpp
-else
-SUFFIX_$(1) := c
-endif
+LIBS_$1 := $$(if $$(filter cpp, $$(foreach i, $$(SOURCES_$1), $$(SUFFIX_$$i))), stdc++)
+LIBS_$1_host := $$(LIBS_$1) $(LIBS_host)
+LIBS_$1_target := $$(LIBS_$1) $(LIBS_target)
 
-$(1)_host: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_host)) $(LIBS_host) $(PRODUCT_DEPS)
-	$$(LD_$$(SUFFIX_$(1))_host) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^)
-$(1)_target: $(foreach i, $(SOURCES_$(1)), $(OBJECT_$(i)_target)) $(LIBS_target) $(PRODUCT_DEPS)
-	$$(LD_$$(SUFFIX_$(1))_target) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^) -lm -lbfdsp
+$1_host: $(foreach i, $(SOURCES_$1), $(OBJECT_$i_host)) $(ARS_host) $(PRODUCT_DEPS)
+	$$(LD_host) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^) $$(addprefix -l, $$(LIBS_$1_host))
+$1_target: $(foreach i, $(SOURCES_$1), $(OBJECT_$i_target)) $(ARS_target) $(PRODUCT_DEPS)
+	$$(LD_target) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^) $$(addprefix -l, $$(LIBS_$1_target))
 endef
 $(foreach i, $(APPS), $(eval $(call LINK,$i)))
 
