@@ -59,6 +59,8 @@ CC_cpp_target = bfin-uclinux-g++ -std=gnu++98 $(CFLAGS_target)
 LD_host := gcc -fPIC
 LD_target := bfin-uclinux-gcc -elf2flt="-s 1048576"
 
+APPS := $(patsubst SOURCES_%, %, $(filter SOURCES_%, $(.VARIABLES)))
+
 ARS_host := oscar/library/libosc_host
 ARS_target := oscar/library/libosc_target
 ifeq 'CONFIG_ENABLE_DEBUG' 'y'
