@@ -188,7 +188,7 @@ int main(const int argc, const char * argv[])
 
 	//StateControl();
 
-	mainDemo();
+	cvCalib();
 
 	Unload();
 	return 0;
