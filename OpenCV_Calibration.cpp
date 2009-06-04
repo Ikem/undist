@@ -52,7 +52,7 @@ int cvCalib(void) {
 #endif
 
 #if defined(OSC_TARGET)
-    char* srcImage = "/home/httpd/test.bmp";	// // Path to the board image for target
+    char* srcImage = "/home/httpd/left12.bmp";	// // Path to the board image for target
 #endif
 
 
