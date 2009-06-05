@@ -35,12 +35,8 @@ APP_NAME := template
 PRODUCTS := app cgi/cgi
 
 # Listings of source files for the different executables.
-SOURCES_app := $(wildcard *.c)
-SOURCES_cgi/cgi := $(wildcard cgi/*.c)
-
-# Listings of source files for the different applications.
-SOURCES_app-template := $(wildcard *.c *.cpp)
-SOURCES_cgi/template.cgi := $(wildcard cgi/*.c cgi/*.cpp)
+SOURCES_app := $(wildcard *.c *.cpp)
+SOURCES_cgi/cgi := $(wildcard cgi/*.c cgi/*.cpp)
 
 APPS := app-template cgi/template.cgi
 
@@ -94,10 +90,10 @@ all: $(BINARIES)
 host target: %: $(addsuffix _%, $(PRODUCTS))
 
 deploy: $(APP_NAME).app
-	tar c $< | ssh root@$(CONFIG_TARGET_IP) 'rm -rf $< && tar x' || true
+	tar c $< | ssh root@$(CONFIG_TARGET_IP) 'rm -rf $< && tar x -C /tmp' || true
 
 run:
-	ssh root@$(CONFIG_TARGET_IP) /mnt/app/$(APP_NAME).app/run.sh || true
+	ssh root@$(CONFIG_TARGET_IP) /tmp/$(APP_NAME).app/run.sh || true
 
 install: cgi/cgi_host
 	cp -RL cgi/www/* /var/www
