@@ -129,9 +129,55 @@ int cvCalib(void) {
     } //END COLLECTION WHILE LOOP.
 
     // -----------------------------------------------
+    //ALLOCATE MATRICES ACCORDING TO HOW MANY CHESSBOARDS FOUND
+    CvMat* object_points2  = cvCreateMat(successes*board_n,3,CV_32FC1);
+    CvMat* image_points2   = cvCreateMat(successes*board_n,2,CV_32FC1);
+    CvMat* point_counts2   = cvCreateMat(successes,1,CV_32SC1);
+    //TRANSFER THE POINTS INTO THE CORRECT SIZE MATRICES
+    //Below, we write out the details in the next two loops. We could
+    //instead have written:
+    //image_points->rows = object_points->rows
+    //successes*board_n; point_counts->rows = successes;
+    //
+    for(int i = 0; i<successes*board_n; ++i) {
+    	CV_MAT_ELEM( *image_points2, float, i, 0) =
+        	CV_MAT_ELEM( *image_points, float, i, 0);
+        CV_MAT_ELEM( *image_points2, float,i,1) =
+            CV_MAT_ELEM( *image_points, float, i, 1);
+        CV_MAT_ELEM(*object_points2, float, i, 0) =
+        	CV_MAT_ELEM( *object_points, float, i, 0) ;
+        CV_MAT_ELEM( *object_points2, float, i, 1) =
+            CV_MAT_ELEM( *object_points, float, i, 1) ;
+        CV_MAT_ELEM( *object_points2, float, i, 2) =
+            CV_MAT_ELEM( *object_points, float, i, 2) ;
+    }
+	for(int i=0; i<successes; ++i){ //These are all the same number
+		CV_MAT_ELEM( *point_counts2, int, i, 0) =
+            CV_MAT_ELEM( *point_counts, int, i, 0);
+    }
+    cvReleaseMat(&object_points);
+    cvReleaseMat(&image_points);
+    cvReleaseMat(&point_counts);
+    // At this point we have all of the chessboard corners we need.
+    // Initialize the intrinsic matrix such that the two focal
+    // lengths have a ratio of 1.0
+    //
+    CV_MAT_ELEM( *intrinsic_matrix, float, 0, 0 ) = 1.0f;
+    CV_MAT_ELEM( *intrinsic_matrix, float, 1, 1 ) = 1.0f;
+    //CALIBRATE THE CAMERA!
+    cvCalibrateCamera2(
+    	object_points2, image_points2,
+        point_counts2,  cvGetSize( image ),
+        intrinsic_matrix, distortion_coeffs,
+        NULL, NULL,0  //CV_CALIB_FIX_ASPECT_RATIO
+        );
+    // SAVE THE INTRINSICS AND DISTORTIONS
+    cvSave("Intrinsics.xml",intrinsic_matrix);
+    cvSave("Distortion.xml",distortion_coeffs);
 
 
 
+    // -----------------------------------------------
     // release the image
     cvReleaseImage( &image );
 
