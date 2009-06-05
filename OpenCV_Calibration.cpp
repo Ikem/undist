@@ -17,9 +17,7 @@ extern "C"
 // Calling convention: -
 //
 
-#include "includesOpenCV/cv.h"
-#include "includesOpenCV/highgui.h"
-#include "includesOpenCV/cvcam.h"
+#include "cv.h"
 #include <stdio.h>
 #include <stdlib.h>
 //#include <ncurses.h>
