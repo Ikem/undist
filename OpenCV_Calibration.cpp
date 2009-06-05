@@ -113,7 +113,7 @@ int cvCalib(void) {
 		   #endif
 
            // If we got a good board, add it to our data
-/*           if( corner_count == board_n ) {
+           if( corner_count == board_n ) {
               step = successes*board_n;
               for( int i=step, j=0; j<board_n; ++i,++j ) {
                  CV_MAT_ELEM(*image_points, float,i,0) = corners[j].x;
@@ -124,8 +124,7 @@ int cvCalib(void) {
               }
               CV_MAT_ELEM(*point_counts, int,successes,0) = board_n;
               successes++;
-           }*/
-			   successes++;
+           }
         } //end skip board_dt between chessboard capture
     } //END COLLECTION WHILE LOOP.
 
