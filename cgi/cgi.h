@@ -24,6 +24,7 @@
 #ifndef CGI_TEMPLATE_H_
 #define CGI_TEMPLATE_H_
 
+#include "oscar.h"
 #include "../template_ipc.h"
 
 /*! @brief The maximum length of the POST argument string supplied
@@ -34,7 +35,7 @@
 #define MAX_ARG_NAME_LEN 32
 
 /*! @brief The file name of the live image. */
-#define IMG_FN "../img.bmp"
+#define IMG_FN "../image.bmp"
 
 /* @brief The different data types of the argument string. */
 enum EnArgumentType

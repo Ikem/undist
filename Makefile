@@ -28,8 +28,15 @@ ifeq '$(filter .config, $(MAKEFILE_LIST))' ''
 $(error Please configure the application using './configure' prior to compilation.)
 endif
 
-# Name for the application to produce
-APP_NAME := app-template
+# Name for the application to produce.
+APP_NAME := template
+
+# Binary executables to generate.
+PRODUCTS := app cgi/cgi
+
+# Listings of source files for the different executables.
+SOURCES_app := $(wildcard *.c)
+SOURCES_cgi/cgi := $(wildcard cgi/*.c)
 
 # Listings of source files for the different applications.
 SOURCES_app-template := $(wildcard *.c *.cpp)
@@ -80,25 +87,28 @@ ARS_target += ../opencv-1.1.0/cv/src/.libs/libcv.a ../opencv-1.1.0/cxcore/src/.l
 LIBS_host := m pthread
 LIBS_target := m bfdsp pthread
 
-.PHONY: all clean host target install deploy run reconfigure
-all: $(addsuffix _host, $(APPS)) $(addsuffix _target, $(APPS))
-host target: %: $(addsuffix _%, $(APPS))
+BINARIES := $(addsuffix _host, $(PRODUCTS)) $(addsuffix _target, $(PRODUCTS))
 
-deploy: runapp.sh $(APP_NAME)_target cgi/www.tar.gz
-	scp -rp $^ root@$(CONFIG_TARGET_IP):/mnt/app || true
+.PHONY: all clean host target install deploy run reconfigure
+all: $(BINARIES)
+host target: %: $(addsuffix _%, $(PRODUCTS))
+
+deploy: $(APP_NAME).app
+	tar c $< | ssh root@$(CONFIG_TARGET_IP) 'rm -rf $< && tar x' || true
 
 run:
-	ssh root@$(CONFIG_TARGET_IP) /mnt/app/runapp.sh || true
+	ssh root@$(CONFIG_TARGET_IP) /mnt/app/$(APP_NAME).app/run.sh || true
 
-install: cgi/template.cgi_host
-	cp -r cgi/www/* /var/www
-	cp $< /var/www/cgi-bin/template.cgi
+install: cgi/cgi_host
+	cp -RL cgi/www/* /var/www
+	cp $< /var/www/cgi-bin/cgi
+	chmod -Rf a+rX /var/www/ || true
 
 reconfigure:
 ifeq '$(CONFIG_PRIVATE_FRAMEWORK)' 'n'
 	@ ! [ -e "oscar" ] || [ -h "oscar" ] && ln -sfn $(CONFIG_FRAMEWORK_PATH) oscar || echo "The symlink to the lgx module could not be created as the file ./lgx already exists and is something other than a symlink. Pleas remove it and run 'make reconfigure' to create the symlink."
 endif
-	! [ -d "oscar" ] || $(MAKE) -C oscar config
+	@ ! [ -d "oscar" ] || $(MAKE) -C oscar config
 
 oscar/%:
 	$(MAKE) -C oscar $*
@@ -142,12 +152,14 @@ $1_host: $(foreach i, $(SOURCES_$1), $(OBJECT_$i_host)) $(ARS_host) $(PRODUCT_DE
 $1_target: $(foreach i, $(SOURCES_$1), $(OBJECT_$i_target)) $(ARS_target) $(PRODUCT_DEPS)
 	$$(LD_target) -o $$@ $$(filter-out $(PRODUCT_DEPS), $$^) $$(addprefix -l, $$(LIBS_$1_target))
 endef
-$(foreach i, $(APPS), $(eval $(call LINK,$i)))
+$(foreach i, $(PRODUCTS), $(eval $(call LINK,$i)))
 
-cgi/www.tar.gz: cgi/template.cgi_target $(shell find cgi/www)
-	cp $< cgi/www/cgi-bin/template.cgi
-	tar c -C cgi/www . | gzip > $@
+.PHONY: $(APP_NAME).app
+$(APP_NAME).app: $(addsuffix _target, $(PRODUCTS))
+	rm -rf $@
+	cp -rL app $@
+	tar c -h -C cgi/www . | gzip > $@/www.tar.gz
 
 # Cleans the application.
 clean:
-	rm -rf build $(APPS) cgi/www.tar.gz
+	rm -rf build *.gdb $(BINARIES) $(APP_NAME).app
