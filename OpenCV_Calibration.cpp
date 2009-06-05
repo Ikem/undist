@@ -23,6 +23,15 @@ extern "C"
 //#include <ncurses.h>
 #include <iostream>
 
+#if defined(OSC_HOST)
+#define IMAGE_DIRECTORY "/home/mike/undist/"
+#endif
+
+#if defined(OSC_TARGET)
+#define IMAGE_DIRECTORY "/home/httpd/"
+#endif
+
+
 using namespace std;
 
 //Will be used with the Calibration Application
@@ -45,14 +54,7 @@ int cvCalib(void) {
 
     struct OSC_PICTURE pic;
 
-#if defined(OSC_HOST)
-    char* srcImage = "/home/mike/undist/left12.bmp";	// Path to the board image for host
-#endif
-
-#if defined(OSC_TARGET)
-    char* srcImage = "/home/httpd/left12.bmp";	// // Path to the board image for target
-#endif
-
+    char* srcImage = IMAGE_DIRECTORY "left12.bmp";
 
     pic.height = image->height;
     pic.width = image->width;
@@ -60,7 +62,7 @@ int cvCalib(void) {
 
     // Loads source image from file
     OscBmpRead (&pic, srcImage);
-//-------------------------------------------------------------------------------------------------------------
+// 1-----------------------------------------------------------------------------------------------------------
 
     int board_n  = board_w * board_h;				// Number of the corners on the board: board_n = 6 x 9 = 54
     CvSize board_sz = cvSize( board_w, board_h );
@@ -102,15 +104,7 @@ int cvCalib(void) {
            //cvSaveImage("Calibration.jpg", image);
            pic.data = image->imageData;
 
-           #if defined(OSC_HOST)
-			   OscBmpWrite(&pic, "/home/mike/undist/calibrated.bmp~");
-			   rename("/home/mike/undist/calibrated.bmp~", "/home/mike/undist/calibrated.bmp");
-		   #endif
-
-		   #if defined(OSC_TARGET)
-			   OscBmpWrite(&pic, "/home/httpd/calibrated.bmp~");
-			   rename("/home/httpd/calibrated.bmp~", "/home/httpd/calibrated.bmp");
-		   #endif
+           OscBmpWrite(&pic, IMAGE_DIRECTORY "calibrated.bmp");
 
            // If we got a good board, add it to our data
            if( corner_count == board_n ) {
@@ -128,7 +122,7 @@ int cvCalib(void) {
         } //end skip board_dt between chessboard capture
     } //END COLLECTION WHILE LOOP.
 
-    // -----------------------------------------------
+    // 2-----------------------------------------------
     //ALLOCATE MATRICES ACCORDING TO HOW MANY CHESSBOARDS FOUND
     CvMat* object_points2  = cvCreateMat(successes*board_n,3,CV_32FC1);
     CvMat* image_points2   = cvCreateMat(successes*board_n,2,CV_32FC1);
@@ -174,6 +168,78 @@ int cvCalib(void) {
     // SAVE THE INTRINSICS AND DISTORTIONS
     cvSave("Intrinsics.xml",intrinsic_matrix);
     cvSave("Distortion.xml",distortion_coeffs);
+
+    // 3----------------------------------------------
+    // Undistortion ------------------------------------------------------------
+
+    // EXAMPLE OF LOADING THESE MATRICES BACK IN:
+    CvMat *intrinsic = (CvMat*)cvLoad("Intrinsics.xml");
+    CvMat *distortion = (CvMat*)cvLoad("Distortion.xml");
+    // Build the undistort map that we will use for all
+    // subsequent frames.
+    //
+    IplImage* mapx = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+    IplImage* mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+
+    cvInitUndistortMap(
+    	intrinsic,
+        distortion,
+        mapx,
+        mapy
+        );
+    // Just run the camera to the screen, now showing the raw and
+    // the undistorted image.
+    //
+    // ----------------------------------------------------------
+    if(image) {
+    	IplImage *t = cvCloneImage(image);
+        cvRemap( t, image, mapx, mapy );     // Undistort image
+        cvReleaseImage(&t);
+        //cvSaveImage("Undistort.jpg", image);
+        OscBmpWrite(&pic, IMAGE_DIRECTORY "undistorted.bmp");
+        //image = cvQueryFrame( capture );
+        }
+    // ----------------------------------------------------------
+
+    //image = cvLoadImage( input_filename, 1 );
+    // Loads source image from file
+    OscBmpRead (&pic, srcImage);
+
+    IplImage *a = cvCloneImage(image);
+
+    // Rectify our image
+    //
+    cvRemap( a, image, mapx, mapy );
+
+    // GET THE CHESSBOARD ON THE PLANE
+    //
+    int found = cvFindChessboardCorners(
+    	image,
+        board_sz,
+        corners,
+        &corner_count,
+        CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FILTER_QUADS
+        );
+
+#if defined(OSC_HOST)
+    if(!found){
+       	printf("Couldn't aquire chessboard on %s, "
+       			"only found %d of %d corners\n",
+       			"left12.jpg",corner_count,board_n
+       			);
+       	return -1;
+    }
+#endif
+
+    // Get Subpixel accuracy on those corners:
+    cvFindCornerSubPix(
+    	gray_image,
+    	corners,
+    	corner_count,
+    	cvSize(11,11),
+    	cvSize(-1,-1),
+        cvTermCriteria( CV_TERMCRIT_EPS | CV_TERMCRIT_ITER, 30, 0.1 )
+        );
 
 
 
