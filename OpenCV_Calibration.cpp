@@ -36,10 +36,23 @@ extern "C"
 
 using namespace std;
 
+
+
+// Initialize greyscale OpenCV image for OSCAR-framework
+struct OSC_PICTURE initImage(IplImage* image)
+{
+	struct OSC_PICTURE pic;
+    pic.height = image->height;
+    pic.width = image->width;
+    pic.data = image->imageData;
+    pic.type = OSC_PICTURE_GREYSCALE;
+    return pic;
+}
+
 // Will be used with the Calibration Application
 int n_boards = 0; 				// Number of chessboard views
 const int board_dt = 20; 		// Wait 20 frames per chessboard view
-int board_w = 6;				// Number of points "horizontal"
+int board_w = 6;				// Number of points horizontal
 int board_h = 9;				// Number of points vertical
 //CvCapture* capture = 0;
 
@@ -53,13 +66,9 @@ int cvCalib(void) {
        return -1;
     }
 
-    struct OSC_PICTURE pic;
+    struct OSC_PICTURE pic = initImage(image);
 
     char* srcImage = IMAGE_DIRECTORY "left12.bmp";
-
-    pic.height = image->height;
-    pic.width = image->width;
-    pic.data = image->imageData;
 
     // Loads source image from file
     OscBmpRead (&pic, srcImage);
@@ -100,9 +109,10 @@ int cvCalib(void) {
            );
            // Get Subpixel accuracy on those corners
            // cvCvtColor(image, gray_image, CV_BGR2GRAY);
-           cvFindCornerSubPix(gray_image, corners, corner_count,
+/*           cvFindCornerSubPix(gray_image, corners, corner_count,
                       cvSize(11,11),cvSize(-1,-1), cvTermCriteria(
                       CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
+*/
            // Draw it
            cvDrawChessboardCorners(image, board_sz, corners,
                       corner_count, found);
@@ -173,15 +183,15 @@ int cvCalib(void) {
         NULL, NULL,0  //CV_CALIB_FIX_ASPECT_RATIO
         );
     // SAVE THE INTRINSICS AND DISTORTIONS
-    cvSave("Intrinsics.xml",intrinsic_matrix);
-    cvSave("Distortion.xml",distortion_coeffs);
+    cvSave(IMAGE_DIRECTORY "Intrinsics.xml",intrinsic_matrix);
+    cvSave(IMAGE_DIRECTORY "Distortion.xml",distortion_coeffs);
 
     // 3----------------------------------------------
     // Undistortion ------------------------------------------------------------
 
     // EXAMPLE OF LOADING THESE MATRICES BACK IN:
-    CvMat *intrinsic = (CvMat*)cvLoad("Intrinsics.xml");
-    CvMat *distortion = (CvMat*)cvLoad("Distortion.xml");
+    CvMat *intrinsic = (CvMat*)cvLoad(IMAGE_DIRECTORY "Intrinsics.xml");
+    CvMat *distortion = (CvMat*)cvLoad(IMAGE_DIRECTORY "Distortion.xml");
     // Build the undistort map that we will use for all
     // subsequent frames.
     //
@@ -194,10 +204,16 @@ int cvCalib(void) {
         mapx,
         mapy
         );
-
+/*
     // Generating undist.ud file-------------------------------------------------------------------------------
+	#if defined(OSC_HOST)
+    FILE* file = fopen(IMAGE_DIRECTORY "undist.ud", "w"); // file open
+	#endif
 
-    FILE* file = fopen("undist.ud", "w"); // file open
+    #if defined(OSC_TARGET)
+    FILE* file = fopen("/mnt/app/undist.ud", "w"); // file open
+	#endif
+
 
     uint32 bounding_rectangle[4];
     bounding_rectangle[0] = 0;
@@ -222,13 +238,13 @@ int cvCalib(void) {
     		float valx = ptrx[pix];
     		float valy = ptry[pix];
 
-    		if (!(0 < valx && valx <= 752 && 0 < valy && valy <= 480)) {
-    			valx = 0;
-				valy = 0;
-    		}
-
-    		undist[dst] = (uint16) (valx * (65536 / 1024));
-    		undist[dst + 1] = (uint16) (valy * (65536 / 1024));
+    		if (0 < valx && valx <= 752 && 0 < valy && valy <= 480) {
+				undist[dst] = (uint16) (valx * (65536 / 1024));
+				undist[dst + 1] = (uint16) (valy * (65536 / 1024));
+    		} else {
+				undist[dst] = (uint16) -1;
+				undist[dst + 1] = (uint16) -1;
+			}
     		//printf("%d/%d: %f -> %d\n", row, pix, ptr[pix], (uint16)(ptr[pix]*65536/1024));
     	}
     }
@@ -238,6 +254,7 @@ int cvCalib(void) {
     fwrite(resolution, sizeof(uint32), 2, file);
     fwrite(undist, sizeof(uint16), (mapx->width*mapx->height)*2, file);
     fclose(file); // close file
+*/
     //---------------------------------------------------------------------------------------------------------
 
     // Just run the image to the screen, now showing the raw and
@@ -249,7 +266,7 @@ int cvCalib(void) {
         cvRemap( t, image, mapx, mapy );     // Undistort image
         cvReleaseImage(&t);
         // Save undistorted image
-        pic.data = image->imageData;
+//      pic.data = image->imageData;
         OscBmpWrite(&pic, IMAGE_DIRECTORY "undistorted.bmp");
         //image = cvQueryFrame( capture );
         }
@@ -261,6 +278,7 @@ int cvCalib(void) {
 
     // Rectify our image
     cvRemap( a, image, mapx, mapy );
+    cvReleaseImage( &a );
 
     // GET THE CHESSBOARD ON THE PLANE
     int found = cvFindChessboardCorners(
@@ -314,30 +332,25 @@ int cvCalib(void) {
     cvCircle( image, cvPointFrom32f(imgPts[3]), 9, CV_RGB(255,255,0),	3);
 
     //Save chessboard image
-    OscBmpWrite(&pic, IMAGE_DIRECTORY "chessboard.bmp");
-/*
+//    OscBmpWrite(&pic, IMAGE_DIRECTORY "chessboard.bmp");
+
     // FIND THE HOMOGRAPHY
     //
     CvMat *H = cvCreateMat( 3, 3, CV_32F);
-    //cvGetPerspectiveTransform( objPts, imgPts, H);
+    cvGetPerspectiveTransform( objPts, imgPts, H);
 
     // LET THE USER ADJUST THE Z HEIGHT OF THE VIEW
     //
-    float Z = 25;
+    float Z = 25 + (100 * 0.5);
     //IplImage* birds_image = cvCloneImage(image);
     IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
 
-    struct OSC_PICTURE pic_bird;
-
-    pic_bird.height = birds_image->height;
-    pic_bird.width = birds_image->width;
-    pic_bird.data = birds_image->imageData;
+    struct OSC_PICTURE pic_bird = initImage(birds_image);
 
     // Set the height
     //
-    //Z += (39 * 0.5);							//@@@@
 
-   	CV_MAT_ELEM(*H, float, 2, 2) = Z;
+   	CV_MAT_ELEM(*H, float, 2, 2) = 45;
 
   	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
     // USING HOMOGRAPHY TO REMAP THE VIEW
@@ -351,17 +364,45 @@ int cvCalib(void) {
    	// Save birds_eye image
     //pic.data = birds_image->imageData;
 
-    OscBmpWrite(&pic_bird, IMAGE_DIRECTORY "birdseye.bmp");
+//    OscBmpWrite(&pic_bird, IMAGE_DIRECTORY "birdseye.bmp");
 
-    cvSave("H.xml", H); // We can reuse H for the same camera mounting
-*/
+    cvSave(IMAGE_DIRECTORY "H.xml", H); // We can reuse H for the same camera mounting
+// ------------------------------------------------------------------------------------------------------------
+
+    IplImage* testimage = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);	// Initialize image 752,480
+
+    if( testimage == NULL ) {
+       return -1;
+    }
+
+    struct OSC_PICTURE test_pic = initImage(testimage);
+
+    srcImage = IMAGE_DIRECTORY "left12.bmp";
+
+    // Loads source image from file
+    OscBmpRead (&test_pic, srcImage);
+    // ------------------------------------------------------------------------------------------------------------
+    IplImage* testbirds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
+
+    struct OSC_PICTURE test_pic_bird = initImage(testbirds_image);
+
+    H = (CvMat*)cvLoad(IMAGE_DIRECTORY "H.xml");
+    cvWarpPerspective(  testimage,
+       	        		testbirds_image,
+       	        		H,
+       	        		CV_INTER_LINEAR | CV_WARP_INVERSE_MAP | CV_WARP_FILL_OUTLIERS
+       	        		);
+    // Save birds_eye image
+    OscBmpWrite(&test_pic_bird, IMAGE_DIRECTORY "test_birdseye.bmp");
+
+    cvReleaseImage( &testimage );
+    cvReleaseImage( &testbirds_image );
 
     // -----------------------------------------------
     // release the images
     cvReleaseImage( &image );
     cvReleaseImage( &gray_image );
-    cvReleaseImage( &a );
-//  cvReleaseImage( &birds_image );
+    cvReleaseImage( &birds_image );
 
     return 0;
 }
