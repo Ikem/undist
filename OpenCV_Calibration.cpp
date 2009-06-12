@@ -145,10 +145,10 @@ struct CV_CALIBRATION findChessboardCorners(int n_boards, int board_w, int board
 		   );
 		   // Get Subpixel accuracy on those corners
 		   // cvCvtColor(image, gray_image, CV_BGR2GRAY);
-/*         cvFindCornerSubPix(gray_image, calib.corners, corner_count,
+           cvFindCornerSubPix(image, calib.corners, corner_count,
 					  cvSize(11,11),cvSize(-1,-1), cvTermCriteria(
 					  CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-*/
+
 		   // Draw it
 		   cvDrawChessboardCorners(image, board_sz, calib.corners,
 					  corner_count, found);
