@@ -63,6 +63,13 @@ struct CV_CALIBRATION {
 	CvMat* object_points2;
     CvMat* image_points2;
     CvMat* point_counts2;
+    CvMat* intrinsic_matrix;
+    CvMat* distortion_coeffs;
+};
+
+struct CV_PERSPECTIVE {
+    CvMat *H;
+    int Z;
 };
 
 
@@ -276,34 +283,66 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 	// Initialize the intrinsic matrix such that the two focal
 	// lengths have a ratio of 1.0
 	//
-	CvMat* intrinsic_matrix  = cvCreateMat(3,3,CV_32FC1);
-	CvMat* distortion_coeffs = cvCreateMat(5,1,CV_32FC1);
+	calib.intrinsic_matrix  = cvCreateMat(3,3,CV_32FC1);
+	calib.distortion_coeffs = cvCreateMat(5,1,CV_32FC1);
 
-	CV_MAT_ELEM( *intrinsic_matrix, float, 0, 0 ) = 1.0f;
-	CV_MAT_ELEM( *intrinsic_matrix, float, 1, 1 ) = 1.0f;
+	CV_MAT_ELEM( *calib.intrinsic_matrix, float, 0, 0 ) = 1.0f;
+	CV_MAT_ELEM( *calib.intrinsic_matrix, float, 1, 1 ) = 1.0f;
 
 	// CALIBRATE THE CAMERA!
 	cvCalibrateCamera2(
 		calib.object_points2, calib.image_points2,
 		calib.point_counts2,  cvGetSize( image ),
-		intrinsic_matrix, distortion_coeffs,
+		calib.intrinsic_matrix, calib.distortion_coeffs,
 		NULL, NULL,0  //CV_CALIB_FIX_ASPECT_RATIO
 		);
 
-	// SAVE THE INTRINSICS AND DISTORTIONS
-	cvSave(IMAGE_DIRECTORY "Intrinsics.xml",intrinsic_matrix);
-	cvSave(IMAGE_DIRECTORY "Distortion.xml",distortion_coeffs);
 	return calib;
 }
 
 
-IplImage* cmUndistort(IplImage* image)
+struct CV_CALIBRATION saveModel (struct CV_CALIBRATION calib)
+{
+	struct CV_CALIBRATION LVcalib;
+	// SAVE THE INTRINSICS AND DISTORTIONS
+	cvSave(IMAGE_DIRECTORY "Intrinsics.xml",calib.intrinsic_matrix);
+	cvSave(IMAGE_DIRECTORY "Distortion.xml",calib.distortion_coeffs);
+	LVcalib = calib;
+	return LVcalib;
+}
+
+struct CV_PERSPECTIVE saveConfig (struct CV_PERSPECTIVE persp)
+{
+	struct CV_PERSPECTIVE LVpersp;
+	// SAVE THE HOMOGRAPHIE MATRIX
+	cvSave(IMAGE_DIRECTORY "H.xml", persp.H); // We can reuse H for the same camera mounting
+	LVpersp = persp;
+	return LVpersp;
+}
+
+struct CV_CALIBRATION loadModel ()
+{
+	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
+	struct CV_CALIBRATION calib;
+	calib.intrinsic_matrix = (CvMat*)cvLoad(IMAGE_DIRECTORY "Intrinsics.xml");
+	calib.distortion_coeffs = (CvMat*)cvLoad(IMAGE_DIRECTORY "Distortion.xml");
+	return calib;
+}
+
+struct CV_PERSPECTIVE loadConfig ()
+{
+	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
+	struct CV_PERSPECTIVE persp;
+	persp.H = (CvMat*)cvLoad(IMAGE_DIRECTORY "H.xml");
+	return persp;
+}
+
+
+
+IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image)
 {
     // Undistortion ------------------------------------------------------------
 
-    // EXAMPLE OF LOADING THESE MATRICES BACK IN:
-    CvMat *intrinsic = (CvMat*)cvLoad(IMAGE_DIRECTORY "Intrinsics.xml");
-    CvMat *distortion = (CvMat*)cvLoad(IMAGE_DIRECTORY "Distortion.xml");
     // Build the undistort map that we will use for all
     // subsequent frames.
     //
@@ -311,8 +350,8 @@ IplImage* cmUndistort(IplImage* image)
     IplImage* mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
 
     cvInitUndistortMap(
-    	intrinsic,
-        distortion,
+    	calib.intrinsic_matrix,
+        calib.distortion_coeffs,
         mapx,
         mapy
         );
@@ -327,13 +366,16 @@ IplImage* cmUndistort(IplImage* image)
 }
 
 
-IplImage* cmPerspectiveTransform(struct CV_CALIBRATION calib, IplImage* image)
+struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION calib, int Z)
 {
     // Bird's Eye ------------------------------------------------------------
     // GET THE IMAGE AND OBJECT POINTS
     // We will choose chessboard object points as (r,c):
     // (0,0), (board_w-1,0), (0,board_h-1), (board_w-1, board_h-1).
     //
+
+	struct CV_PERSPECTIVE persp;
+	persp.Z = Z;
 
     CvPoint2D32f objPts[4], imgPts[4];
     objPts[0].x = 0;			objPts[0].y = 0;
@@ -352,46 +394,87 @@ IplImage* cmPerspectiveTransform(struct CV_CALIBRATION calib, IplImage* image)
     cvCircle( image, cvPointFrom32f(imgPts[3]), 9, CV_RGB(255,255,0),	3);
 */
     // FIND THE HOMOGRAPHY
-    CvMat *H = cvCreateMat( 3, 3, CV_32F);
+    persp.H = cvCreateMat( 3, 3, CV_32F);
 
-    cvGetPerspectiveTransform( objPts, imgPts, H);
+    cvGetPerspectiveTransform( objPts, imgPts, persp.H);
 
     // LET THE USER ADJUST THE Z HEIGHT OF THE VIEW
-    float Z = 25 + (100 * 0.5);
-    //IplImage* birds_image = cvCloneImage(image);
-    IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
+    //float Z = 25 + (100 * 0.5);
 
     // Set the height
-   	CV_MAT_ELEM(*H, float, 2, 2) = 45;
+   	CV_MAT_ELEM(*persp.H, float, 2, 2) = persp.Z;//45;
 
-  	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
-    // USING HOMOGRAPHY TO REMAP THE VIEW
-   	cvWarpPerspective(  image,
-   	        			birds_image,
-   	        			H,
-   	        			CV_INTER_LINEAR | CV_WARP_INVERSE_MAP | CV_WARP_FILL_OUTLIERS
-   	        			);
-
-    cvSave(IMAGE_DIRECTORY "H.xml", H); // We can reuse H for the same camera mounting
-    return birds_image;
-    cvReleaseImage(&birds_image);
+    return persp;
 }
 
 
-IplImage* perspectiveTransform(IplImage* image)
+IplImage* PerspectiveTransform(struct CV_PERSPECTIVE LVpersp, IplImage* image)
 {
     IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
-    CvMat *H = cvCreateMat( 3, 3, CV_32F);
-    H = (CvMat*)cvLoad(IMAGE_DIRECTORY "H.xml");
+
+  	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
+    // USING HOMOGRAPHY TO REMAP THE VIEW
     cvWarpPerspective(  image,
        	        		birds_image,
-       	        		H,
+       	        		LVpersp.H,
        	        		CV_INTER_LINEAR | CV_WARP_INVERSE_MAP | CV_WARP_FILL_OUTLIERS
        	        		);
 
 	return birds_image;
     cvReleaseImage( &birds_image );
 }
+
+
+IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
+{
+    //IplImage* birds_image = cvCloneImage(image);
+    IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
+
+  	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
+    // USING HOMOGRAPHY TO REMAP THE VIEW
+    cvWarpPerspective(  image,
+       	        		birds_image,
+       	        		persp.H,
+       	        		CV_INTER_LINEAR | CV_WARP_INVERSE_MAP | CV_WARP_FILL_OUTLIERS
+       	        		);
+
+	return birds_image;
+    cvReleaseImage( &birds_image );
+}
+
+
+IplImage* cmUndistortT(struct CV_CALIBRATION calib, IplImage* image)
+{
+    // Undistortion ------------------------------------------------------------
+
+    // Build the undistort map that we will use for all
+    // subsequent frames.
+    //
+    IplImage* mapx = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+    IplImage* mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+
+    cvInitUndistortMap(
+    	calib.intrinsic_matrix,
+        calib.distortion_coeffs,
+        mapx,
+        mapy
+        );
+
+    if(image) {
+    	IplImage *t = cvCloneImage(image);
+        cvRemap( t, image, mapx, mapy );     // Undistort image
+        cvReleaseImage(&t);
+        //image = cvQueryFrame( capture );
+        }
+
+    struct CV_PERSPECTIVE persp;
+    int Z = 45;
+    persp = cmCalculatePerspectiveTransform(calib, Z);
+    image = cmPerspectiveTransform(persp, image);
+    return image;
+}
+
+
 void printModule()
 {
 	const char* libraries;
@@ -417,12 +500,16 @@ int cvCalib(void) {
 	int board_h = 9;				// Number of points vertical
 
 	struct CV_CALIBRATION calib;
+	struct CV_PERSPECTIVE persp, LVpersp;
+
 	const char* srcFile = IMAGE_DIRECTORY "left12.bmp";
 	const char* calibFile = IMAGE_DIRECTORY "calibrated.bmp";
 	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
 	const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
 	const char* test_perspTransFile = IMAGE_DIRECTORY "test_birdseye.bmp";
+	const char* allInOne = IMAGE_DIRECTORY "allInOne.bmp";
 
+	// Calibrate and save image -------------------------------------------------------------------------------
 	SW_START(startCyc);
 	IplImage* image = readImage(srcFile);	// Read image via OSCAR and save for OpenCV
 	calib = cmCalibrateCamera(n_boards, board_w, board_h, image);
@@ -435,29 +522,43 @@ int cvCalib(void) {
 	}
 	SW_STOP("CalibrateCamera", startCyc);
 
+	// Undistort and save image -------------------------------------------------------------------------------
 	SW_START(startCyc);
 	IplImage* undistimage = readImage(srcFile);
-	undistimage = cmUndistort(undistimage);
+	undistimage = cmUndistort(calib, undistimage);
     // Save undistorted image
     writeImage(undistFile, undistimage);
     SW_STOP("Undistort", startCyc);
 
+    // All in one, undistortion and perspective transformation
+    IplImage* gugu = readImage(srcFile);
+    gugu = cmUndistortT(calib, gugu);
+    // Save undistorted image
+    writeImage(allInOne, gugu);
+
     // TestImage for perspectiveTransform, function call in live-view mode
     IplImage* gaga = cvCloneImage(undistimage);
+    int Z = 45;
 
     SW_START(startCyc);
-    undistimage = cmPerspectiveTransform(calib, undistimage);
+    persp = cmCalculatePerspectiveTransform(calib, Z);
+    undistimage = cmPerspectiveTransform(persp, undistimage);
    	// Save birds_eye image
    	writeImage(perspTransFile, undistimage);
     SW_STOP("PerspectiveTransform", startCyc);
 
     // perspectiveTransform, function call in live-view mode
-	gaga = perspectiveTransform(gaga);
+    LVpersp = saveConfig (persp);
+    gaga = PerspectiveTransform(LVpersp, gaga);
    	writeImage(test_perspTransFile, gaga);
+
+
 
 	// release the images
     cvReleaseImage( &image );
     cvReleaseImage( &undistimage );
+    cvReleaseImage( &gaga );
+    cvReleaseImage( &gugu );
 
     return 0;
 }
