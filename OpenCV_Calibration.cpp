@@ -25,6 +25,25 @@ extern "C"
 #include <stdlib.h>
 #include <iostream>
 
+#define BENCHMARK
+
+#ifdef BENCHMARK
+ #define SW_START(startCyc) \
+        startCyc = OscSupCycGet();
+#else /* BENCHMARK */
+ #define SW_START(startCyc) \
+        {};
+#endif /* BENCHMARK */
+
+#ifdef BENCHMARK
+    #define SW_STOP(label, startCyc) \
+    OscLog(CRITICAL, label ": %dus\n", \
+    OscSupCycToMicroSecs(OscSupCycGet() - startCyc));
+#else /* BENCHMARK */
+ #define SW_STOP(label, startCyc) \
+       {};
+#endif /* BENCHMARK */
+
 #if defined(OSC_HOST)
 #define IMAGE_DIRECTORY "/home/mike/undist/"
 #endif
@@ -45,6 +64,60 @@ struct CV_CALIBRATION {
     CvMat* image_points2;
     CvMat* point_counts2;
 };
+
+
+void createUndistFile(const char* directory, IplImage* mapx, IplImage* mapy )
+{
+	// Generating undist.ud file-------------------------------------------------------------------------------
+	#if defined(OSC_HOST)
+	FILE* file = fopen(directory, "w"); // file open	"undist.ud"
+	#endif
+
+	#if defined(OSC_TARGET)
+	FILE* file = fopen(directory, "w"); // file open	"/mnt/app/undist.ud"
+	#endif
+
+
+	uint32 bounding_rectangle[4];
+	bounding_rectangle[0] = 0;
+	bounding_rectangle[1] = 0;
+	bounding_rectangle[2] = 752;
+	bounding_rectangle[3] = 480;
+
+	uint32 matrix_size[2];
+	matrix_size[0] = mapx->width;
+	matrix_size[1] = mapx->height;
+
+	float resolution[2];
+	resolution[0] = 0.5161;
+	resolution[1] = 0.5161;
+
+	uint16 undist[(mapx->width*mapx->height)*2];
+
+	for (int row=0, dst=0; row<(mapx->height); row += 1) {
+		float * ptrx = (float*) (mapx->imageData + row*mapx->widthStep);
+		float * ptry = (float*) (mapy->imageData + row*mapy->widthStep);
+		for(int pix=0; pix<mapx->width; pix++, dst += 2){
+			float valx = ptrx[pix];
+			float valy = ptry[pix];
+
+			if (0 < valx && valx <= 752 && 0 < valy && valy <= 480) {
+				undist[dst] = (uint16) (valx * (65536 / 1024));
+				undist[dst + 1] = (uint16) (valy * (65536 / 1024));
+			} else {
+				undist[dst] = (uint16) -1;
+				undist[dst + 1] = (uint16) -1;
+			}
+			//printf("%d/%d: %f -> %d\n", row, pix, ptr[pix], (uint16)(ptr[pix]*65536/1024));
+		}
+	}
+
+	fwrite(bounding_rectangle, sizeof(uint32), 4, file);
+	fwrite(matrix_size, sizeof(uint32), 2, file);
+	fwrite(resolution, sizeof(uint32), 2, file);
+	fwrite(undist, sizeof(uint16), (mapx->width*mapx->height)*2, file);
+	fclose(file); // close file
+}
 
 
 IplImage* readImage(const char* srcImage)
@@ -272,12 +345,12 @@ IplImage* cmPerspectiveTransform(struct CV_CALIBRATION calib, IplImage* image)
     imgPts[2] = calib.corners[(calib.board_h-1)*calib.board_w];
     imgPts[3] = calib.corners[(calib.board_h-1)*calib.board_w + calib.board_w-1];
 
-    // DRAW THE POINTS in order: B,G,R,YELLOW
+/*  // DRAW THE POINTS in order: B,G,R,YELLOW
     cvCircle( image, cvPointFrom32f(imgPts[0]), 9, CV_RGB(0,0,255),		3);
     cvCircle( image, cvPointFrom32f(imgPts[1]), 9, CV_RGB(0,255,0),		3);
     cvCircle( image, cvPointFrom32f(imgPts[2]), 9, CV_RGB(255,0,0),		3);
     cvCircle( image, cvPointFrom32f(imgPts[3]), 9, CV_RGB(255,255,0),	3);
-
+*/
     // FIND THE HOMOGRAPHY
     CvMat *H = cvCreateMat( 3, 3, CV_32F);
 
@@ -285,7 +358,8 @@ IplImage* cmPerspectiveTransform(struct CV_CALIBRATION calib, IplImage* image)
 
     // LET THE USER ADJUST THE Z HEIGHT OF THE VIEW
     float Z = 25 + (100 * 0.5);
-    IplImage* birds_image = cvCloneImage(image);
+    //IplImage* birds_image = cvCloneImage(image);
+    IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
 
     // Set the height
    	CV_MAT_ELEM(*H, float, 2, 2) = 45;
@@ -304,7 +378,7 @@ IplImage* cmPerspectiveTransform(struct CV_CALIBRATION calib, IplImage* image)
 }
 
 
-IplImage* perspectiveTransfrom(IplImage* image)
+IplImage* perspectiveTransform(IplImage* image)
 {
     IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
     CvMat *H = cvCreateMat( 3, 3, CV_32F);
@@ -318,9 +392,24 @@ IplImage* perspectiveTransfrom(IplImage* image)
 	return birds_image;
     cvReleaseImage( &birds_image );
 }
-
+void printModule()
+{
+	const char* libraries;
+    const char* modules;
+    cvGetModuleInfo(0, &libraries, &modules );
+    printf("Libraries: %s\nModules: %s\n", libraries, modules);
+}
 
 int cvCalib(void) {
+
+//	#define MODULE
+	#ifdef MODULE
+		printModule();
+	#endif
+
+	#ifdef BENCHMARK
+		uint32 startCyc;
+	#endif
 
 	// Will be used with the Calibration Application
 	int n_boards = 1; 				// Number of chessboard views
@@ -332,9 +421,9 @@ int cvCalib(void) {
 	const char* calibFile = IMAGE_DIRECTORY "calibrated.bmp";
 	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
 	const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
-	//const char* test_perspTransFile = IMAGE_DIRECTORY "test_birdseye.bmp";
+	const char* test_perspTransFile = IMAGE_DIRECTORY "test_birdseye.bmp";
 
-
+	SW_START(startCyc);
 	IplImage* image = readImage(srcFile);	// Read image via OSCAR and save for OpenCV
 	calib = cmCalibrateCamera(n_boards, board_w, board_h, image);
 
@@ -344,23 +433,31 @@ int cvCalib(void) {
 	} else {
 		printf("wrong input parameters x, y");
 	}
+	SW_STOP("CalibrateCamera", startCyc);
 
+	SW_START(startCyc);
 	IplImage* undistimage = readImage(srcFile);
 	undistimage = cmUndistort(undistimage);
     // Save undistorted image
     writeImage(undistFile, undistimage);
+    SW_STOP("Undistort", startCyc);
 
+    // TestImage for perspectiveTransform, function call in live-view mode
+    IplImage* gaga = cvCloneImage(undistimage);
 
+    SW_START(startCyc);
     undistimage = cmPerspectiveTransform(calib, undistimage);
    	// Save birds_eye image
    	writeImage(perspTransFile, undistimage);
-	//undistimage = perspectiveTransfrom(undistimage);
-   	//writeImage(test_perspTransFile, undistimage);
+    SW_STOP("PerspectiveTransform", startCyc);
+
+    // perspectiveTransform, function call in live-view mode
+	gaga = perspectiveTransform(gaga);
+   	writeImage(test_perspTransFile, gaga);
 
 	// release the images
     cvReleaseImage( &image );
     cvReleaseImage( &undistimage );
 
-    //cvGetModuleInfo();
     return 0;
 }
