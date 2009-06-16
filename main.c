@@ -187,9 +187,12 @@ int main(const int argc, const char * argv[])
 	OscLogSetFileLogLevel(WARN);
 
 	//StateControl();
-
+///*
+	uint64_t time = OscSupCycGet64();
 	cvCalib();
-
+    time = OscSupCycGet64() - time;
+    printf("%lf s\n", OscSupCycToMicroSecs64(time) / 1000000.);
+//*/
 	Unload();
 	return 0;
 }
