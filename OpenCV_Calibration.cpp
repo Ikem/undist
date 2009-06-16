@@ -443,7 +443,7 @@ IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
 }
 
 
-IplImage* cmUndistortT(struct CV_CALIBRATION calib, IplImage* image)
+IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image, bool persp_transform)
 {
     // Undistortion ------------------------------------------------------------
 
@@ -466,12 +466,13 @@ IplImage* cmUndistortT(struct CV_CALIBRATION calib, IplImage* image)
         cvReleaseImage(&t);
         //image = cvQueryFrame( capture );
         }
-
-    struct CV_PERSPECTIVE persp;
-    int Z = 45;
-    persp = cmCalculatePerspectiveTransform(calib, Z);
-    image = cmPerspectiveTransform(persp, image);
-    return image;
+    if(persp_transform){
+    	struct CV_PERSPECTIVE persp;
+   	    int Z = 45;
+   	    persp = cmCalculatePerspectiveTransform(calib, Z);
+   	    image = cmPerspectiveTransform(persp, image);
+    }
+        return image;
 }
 
 
@@ -498,6 +499,7 @@ int cvCalib(void) {
 	int n_boards = 1; 				// Number of chessboard views
 	int board_w = 6;				// Number of points horizontal
 	int board_h = 9;				// Number of points vertical
+	bool persp_transform = TRUE;
 
 	struct CV_CALIBRATION calib;
 	struct CV_PERSPECTIVE persp, LVpersp;
@@ -532,7 +534,7 @@ int cvCalib(void) {
 
     // All in one, undistortion and perspective transformation
     IplImage* gugu = readImage(srcFile);
-    gugu = cmUndistortT(calib, gugu);
+    gugu = cmUndistort(calib, gugu, persp_transform);
     // Save undistorted image
     writeImage(allInOne, gugu);
 
