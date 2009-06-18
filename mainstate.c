@@ -22,11 +22,18 @@
  * Makes use of Framework HSM module.
 	************************************************************************/
 
+#include "OpenCV_Calibration.h"
 #include "template.h"
 #include "mainstate.h"
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+// Global image structure used with StateMachine
+struct {
+	IplImage *original, *calibrated, *undistort, *perspTrans;
+} image;
+
 
 const Msg mainStateMsg[] = {
 	{ FRAMESEQ_EVT },
@@ -99,6 +106,9 @@ Msg const *MainState_top(MainState *me, Msg *msg)
 		}
 
 		return 0;
+	case SHOW_RAW_IMAGE_EVT:
+		STATE_TRAN(me, &me->Raw);
+		return 0;
 	case FRAMESEQ_EVT:
 		return 0;
 	case FRAMEPAR_EVT:
@@ -163,7 +173,7 @@ Msg const *MainState_Undistort(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State Undistort!\n");
-		usleep(5000000);
+		usleep(2000000);
 		OscLog(INFO, "Waited 5s !\n");
 		return 0;
 	}
@@ -172,10 +182,18 @@ Msg const *MainState_Undistort(MainState *me, Msg *msg)
 
 Msg const *MainState_WaitForGrid(MainState *me, Msg *msg)
 {
+	bool read_file = 1;
+	const char* srcFile = IMAGE_DIRECTORY "left12.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State WaitForGrid!\n");
+		if(read_file){
+			OscLog(INFO, "Read bmp\n");
+			image.original = readImage(srcFile);
+		}else{
+			OscLog(INFO, "Read image from sensor\n");
+		}
 		return 0;
 	case IMG_SEQ_EVT:
 		OscLog(INFO, "IMG_SEQ_EVT\n");
@@ -187,10 +205,13 @@ Msg const *MainState_WaitForGrid(MainState *me, Msg *msg)
 
 Msg const *MainState_ShowGrid(MainState *me, Msg *msg)
 {
+	const char* showFile = IMAGE_DIRECTORY "original.bmp";
+
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State ShowGrid!\n");
+		writeImage(showFile, image.original);
 		return 0;
 	case CALIBRATE_CAMERA_EVT:
 		OscLog(INFO, "CALIBRATE_CAMERA_EVT\n");
@@ -202,10 +223,20 @@ Msg const *MainState_ShowGrid(MainState *me, Msg *msg)
 
 Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 {
+	const char* calibFile = IMAGE_DIRECTORY "calibrated.bmp";
+
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State CalibrateCamera!\n");
+		calib = cmCalibrateCamera(calib.n_boards, calib.board_w, calib.board_h, image.original);
+		image.calibrated = cmDrawChessboardCorners(image.original, calib);
+		if(calib.corners_found){
+				// Save calibrated image
+				writeImage(calibFile, image.calibrated);
+			} else {
+				OscLog(ERROR, "wrong input parameters x, y\n");
+			}
 		return 0;
 	case UNDISTORT_GRID_EVT:
 		OscLog(INFO, "UNDISTORT_GRID_EVT\n");
@@ -217,10 +248,22 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 
 Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 {
+	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
+	const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State UndistortGridAndShow!\n");
+		image.undistort = cmUndistort(calib, image.original);
+		// Save undistorted image
+		writeImage(undistFile, image.undistort);
+		persp = cmCalculatePerspectiveTransform(calib, persp.Z, persp.perspTransform);
+		if(persp.perspTransform)
+		{
+			image.perspTrans = cmPerspectiveTransform(persp, image.undistort);
+			// Save birds_eye image
+			writeImage(perspTransFile, image.perspTrans);
+		}
 		return 0;
 	}
 	return msg;
@@ -244,6 +287,29 @@ void MainStateConstruct(MainState *me)
 
 }
 
+int readLine() {
+	char buffer[100];
+	int n = 0;
+	char command[100];
+	int args[5];
+
+	printf("> ");
+	fflush(stdout);
+
+	fgets(buffer, sizeof buffer, stdin);
+
+	n = sscanf(buffer, "%s %d %d %d %d %d", command, &args[0], &args[1], &args[2], &args[3], &args[4]);
+
+	if (n > 0) {
+		//printf("%d: %s %d %d %d %d %d\n", n, command, args[0], args[1], args[2], args[3], args[4]);
+
+		if (strcmp(command, "show-raw") == 0) {
+			printf("%s", "ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);");
+		}
+
+		}
+	}
+}
 
 OSC_ERR StateControl( void)
 {
@@ -256,13 +322,30 @@ OSC_ERR StateControl( void)
 	HsmOnStart((Hsm *)&mainState);
 	//OscSimInitialize();
 
-	bool ShowRawImageBtn = 0;
-	bool ShowUndistImageBtn = 1, GoToLiveViewBtn = 0, GoToCalibrateBtn = 1, GetNewGridBtn = 1, ImageReady = 1,
+	bool ShowRawImageBtn = 1;
+	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 0, GoToCalibrateBtn = 1, GetNewGridBtn = 1, ImageReady = 1,
 		 CalibrateCameraBtn = 1, UndistortGridBtn = 1;
 
 	/*----------- infinite main loop */
+	/*	Enters in state Raw and then goes to state CalibrationMode and follows all states to calibrate and
+		undistort a given bmp.
+
+		Output images:
+		original.bmp, calibrated.bmp, undistort.bmp, birdseye.bmp
+	*/
 	while (TRUE)
 	{
+		readLine();
+		/*
+	// Input parameters
+		calib.n_boards = 1; 			// Number of chessboard views
+		calib.board_w = 6;				// Number of points horizontal
+		calib.board_h = 9;				// Number of points vertical
+
+	    persp.Z = 45;
+		persp.perspTransform = TRUE;//FALSE;
+
+	// ----------------------------------------------------------------------------------------------------
 		if(ShowRawImageBtn){
 			OscLog(INFO, "ShowRawImageBtn\n");
 			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
@@ -303,7 +386,7 @@ OSC_ERR StateControl( void)
 			ThrowEvent(&mainState, UNDISTORT_GRID_EVT);
 			UndistortGridBtn = 0;
 		}
-
+		*/
 		/* Advance the simulation step counter. */
 		//OscSimStep();
 	} /* end while ever */

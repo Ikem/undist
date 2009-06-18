@@ -1,9 +1,3 @@
-extern "C"
-{
-	int cvCalib(void);
-	#include <unistd.h>
-
-}
 
 //============================================================================
 // Name        : OpenCV_Calibration.cpp
@@ -21,9 +15,11 @@ extern "C"
 
 #include "cv.h"
 #include "cxcore.h"
+#include "OpenCV_Calibration.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <unistd.h>
 
 #define BENCHMARK
 
@@ -55,23 +51,6 @@ extern "C"
 
 using namespace std;
 
-struct CV_CALIBRATION {
-	int board_w;
-	int board_h;
-	int corners_found;
-	CvPoint2D32f* corners;
-	CvMat* object_points2;
-    CvMat* image_points2;
-    CvMat* point_counts2;
-    CvMat* intrinsic_matrix;
-    CvMat* distortion_coeffs;
-};
-
-struct CV_PERSPECTIVE {
-    CvMat *H;
-    bool perspTransform;
-    int Z;
-};
 
 
 void createUndistFile(const char* directory, IplImage* mapx, IplImage* mapy )
@@ -185,13 +164,13 @@ fail:
 
 struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, IplImage* image )
 {
-	struct CV_CALIBRATION calib;
+	//struct CV_CALIBRATION calib;
 	const int board_dt = 20;				// Wait 20 frames per chessboard view
 	calib.board_w = board_w;
 	calib.board_h = board_h;
 
 	int board_n  = board_w * board_h;				// Number of the corners on the board: board_n = 6 x 9 = 54
-	CvSize board_sz = cvSize( board_w, board_h );
+	calib.board_sz = cvSize( board_w, board_h );
 
 	// ALLOCATE STORAGE
 	CvMat* image_points      = cvCreateMat(n_boards*board_n,2,CV_32FC1);
@@ -200,7 +179,7 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 
 
 	calib.corners = new CvPoint2D32f[ board_n ];
-	int corner_count;
+	calib.corner_count;
 	int successes = 0;
 	int step, frame = 0;
 
@@ -215,21 +194,18 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 		if(frame++ % board_dt == 0) {
 		   // Find chessboard corners:
 		   calib.corners_found = cvFindChessboardCorners(
-				   image, board_sz, calib.corners, &corner_count,
+				   image, calib.board_sz, calib.corners, &calib.corner_count,
 					CV_CALIB_CB_ADAPTIVE_THRESH | CV_CALIB_CB_FILTER_QUADS
 		   );
 		   // Get Subpixel accuracy on those corners
 		   // cvCvtColor(image, gray_image, CV_BGR2GRAY);
-           cvFindCornerSubPix(image, calib.corners, corner_count,
+           cvFindCornerSubPix(image, calib.corners, calib.corner_count,
 					  cvSize(11,11),cvSize(-1,-1), cvTermCriteria(
 					  CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
 
-		   // Draw it
-		   cvDrawChessboardCorners(image, board_sz, calib.corners,
-					  corner_count, calib.corners_found);
 
 		   // If we got a good board, add it to our data
-		   if( corner_count == board_n ) {
+		   if( calib.corner_count == board_n ) {
 			  step = successes*board_n;
 			  for( int i=step, j=0; j<board_n; ++i,++j ) {
 				 CV_MAT_ELEM(*image_points, float,i,0) = calib.corners[j].x;
@@ -299,6 +275,15 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 		);
 
 	return calib;
+}
+
+IplImage* cmDrawChessboardCorners(IplImage* image, struct CV_CALIBRATION calib)
+{
+	IplImage* cornerImage = cvCloneImage(image);
+	// Draw it
+	cvDrawChessboardCorners(cornerImage, calib.board_sz, calib.corners,
+							calib.corner_count, calib.corners_found);
+	return cornerImage;
 }
 
 
@@ -503,6 +488,7 @@ int cvCalib(void) {
 	SW_START(startCyc);
 	IplImage* image = readImage(srcFile);	// Read image via OSCAR and save for OpenCV
 	calib = cmCalibrateCamera(n_boards, board_w, board_h, image);
+	image = cmDrawChessboardCorners(image, calib);
 
 	if(calib.corners_found){
 		// Save calibrated image
@@ -541,7 +527,6 @@ int cvCalib(void) {
 	bool perspTransform = TRUE;//FALSE;
 	persp = cmCalculatePerspectiveTransform(calib, Z, perspTransform);
     if(persp.perspTransform){
-   	    printf("was");
     	gugu = cmPerspectiveTransform(persp, gugu);
    	    // Save birds_eye image
    	    writeImage(allInOne, gugu);
