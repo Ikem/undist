@@ -13,13 +13,16 @@
 			
 			$(function () {
 				$("div[id]").everyTime("500ms", function () {
-					$(this).find("img").replaceWith();
 					
 					var img = $(new Image());
+					var div = $(this);
 					
 					img.attr("src", $(this).attr("id") + "?" + id)
 					img.attr("width", 376)
-					$(this).append(img);
+					img.load(function () {
+						div.find("img").replaceWith();
+						div.append(img);
+					})
 					
 					id += 1;
 				})
@@ -27,8 +30,8 @@
 		]]></script>
 	</head>
 	<body>
-		<div style="float:left" id="undist.png">
-			<img id="undist.png" style="width: 376px; height: 240px;" />
-		</div>
+		<div style="display: inline-block" id="original.bmp"/>
+		<div style="display: inline-block" id="original-2.bmp" />
+		<div style="display: inline-block" id="original-3.bmp" />
 	</body>
 </html>

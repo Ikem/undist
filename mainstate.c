@@ -287,7 +287,7 @@ void MainStateConstruct(MainState *me)
 
 }
 
-int readLine() {
+int readLine(MainState*  mainState) {
 	char buffer[100];
 	int n = 0;
 	char command[100];
@@ -303,10 +303,40 @@ int readLine() {
 	if (n > 0) {
 		//printf("%d: %s %d %d %d %d %d\n", n, command, args[0], args[1], args[2], args[3], args[4]);
 
-		if (strcmp(command, "show-raw") == 0) {
+/*		if (strcmp(command, "show-raw") == 0) {
 			printf("%s", "ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);");
+		}*/
+		if(strcmp(command, "show-raw") == 0){
+			OscLog(INFO, "ShowRawImageBtn\n");
+			ThrowEvent(mainState, SHOW_RAW_IMAGE_EVT);
 		}
-
+		if(strcmp(command, "show-undist") == 0){
+			OscLog(INFO, "ShowUndistImageBtn\n");
+			ThrowEvent(mainState, SHOW_UNDIST_IMAGE_EVT);
+		}
+		if(strcmp(command, "live-view") == 0){
+			OscLog(INFO, "GoToLiveViewBtn\n");
+			ThrowEvent(mainState, GO_TO_LIVE_VIEW_EVT);
+		}
+		if(strcmp(command, "calibration-mode") == 0){
+			OscLog(INFO, "GoToCalibrateBtn\n");
+			ThrowEvent(mainState, GO_TO_CALIBRATION_EVT);
+		}
+		if(strcmp(command, "new-grid") == 0){
+			OscLog(INFO, "GetNewGridBtn\n");
+			ThrowEvent(mainState, GET_NEW_GRID_EVT);
+		}
+		if(strcmp(command, "image-ready") == 0){
+			OscLog(INFO, "ImageReady\n");
+			ThrowEvent(mainState, IMG_SEQ_EVT);
+		}
+		if(strcmp(command, "calibrate") == 0){
+			OscLog(INFO, "CalibrateCameraBtn\n");
+			ThrowEvent(mainState, CALIBRATE_CAMERA_EVT);
+		}
+		if(strcmp(command, "undistort") == 0){
+			OscLog(INFO, "UndistortGridBtn\n");
+			ThrowEvent(mainState, UNDISTORT_GRID_EVT);
 		}
 	}
 }
@@ -322,6 +352,7 @@ OSC_ERR StateControl( void)
 	HsmOnStart((Hsm *)&mainState);
 	//OscSimInitialize();
 
+
 	bool ShowRawImageBtn = 1;
 	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 0, GoToCalibrateBtn = 1, GetNewGridBtn = 1, ImageReady = 1,
 		 CalibrateCameraBtn = 1, UndistortGridBtn = 1;
@@ -335,8 +366,8 @@ OSC_ERR StateControl( void)
 	*/
 	while (TRUE)
 	{
-		readLine();
-		/*
+
+
 	// Input parameters
 		calib.n_boards = 1; 			// Number of chessboard views
 		calib.board_w = 6;				// Number of points horizontal
@@ -345,8 +376,15 @@ OSC_ERR StateControl( void)
 	    persp.Z = 45;
 		persp.perspTransform = TRUE;//FALSE;
 
+		readLine(&mainState);
+
+
+
+
+
+
 	// ----------------------------------------------------------------------------------------------------
-		if(ShowRawImageBtn){
+/*		if(ShowRawImageBtn){
 			OscLog(INFO, "ShowRawImageBtn\n");
 			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
 			ShowRawImageBtn = 0;

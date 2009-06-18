@@ -153,11 +153,11 @@ void ProcessFrame(uint8 *pRawImg);
 
 
 /*********************************************************************//*!
- * @brief OpenCV demo application
+ * @brief OpenCV calibration application
  *
  *
  * @return Error code
  *//*********************************************************************/
-int mainDemo(void);
+//int cvCalib(void);
 
 #endif /*TEMPLATE_H_*/
