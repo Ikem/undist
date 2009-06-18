@@ -87,15 +87,14 @@ Msg const *MainState_top(MainState *me, Msg *msg)
 		return 0;
 	*/
 	case START_EVT:
-		//STATE_START(me, &me->Undistort);
-		OscLog(INFO, "holy sh***\n");
+		OscLog(INFO, "Start Event\n");
 		if(ModelPresent)
 		{
-			//STATE_START(me, &me->Undistort);
+			STATE_START(me, &me->Undistort);
 			OscLog(INFO, "ModelPresent\n");
 		}else
 		{
-			STATE_START(me, &me->UndistortGridAndShow);
+			STATE_START(me, &me->Raw);
 			OscLog(INFO, "ModelNotPresent\n");
 		}
 
@@ -164,6 +163,8 @@ Msg const *MainState_Undistort(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State Undistort!\n");
+		usleep(5000000);
+		OscLog(INFO, "Waited 5s !\n");
 		return 0;
 	}
 	return msg;
@@ -255,32 +256,53 @@ OSC_ERR StateControl( void)
 	HsmOnStart((Hsm *)&mainState);
 	//OscSimInitialize();
 
-	bool ShowRawImageBtn = 1;
-	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 0, GoToCalibrateBtn = 0, GetNewGridBtn = 0, ImageReady = 0,
-		 CalibrateCameraBtn = 0, UndistortGridBtn = 0;
+	bool ShowRawImageBtn = 0;
+	bool ShowUndistImageBtn = 1, GoToLiveViewBtn = 0, GoToCalibrateBtn = 1, GetNewGridBtn = 1, ImageReady = 1,
+		 CalibrateCameraBtn = 1, UndistortGridBtn = 1;
 
 	/*----------- infinite main loop */
 	while (TRUE)
 	{
 		if(ShowRawImageBtn){
-			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
 			OscLog(INFO, "ShowRawImageBtn\n");
+			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
 			ShowRawImageBtn = 0;
 		}
-		if(ShowUndistImageBtn)
+		if(ShowUndistImageBtn){
+			OscLog(INFO, "ShowUndistImageBtn\n");
 			ThrowEvent(&mainState, SHOW_UNDIST_IMAGE_EVT);
-		if(GoToLiveViewBtn)
+			ShowUndistImageBtn = 0;
+		}
+		if(GoToLiveViewBtn){
+			OscLog(INFO, "GoToLiveViewBtn\n");
 			ThrowEvent(&mainState, GO_TO_LIVE_VIEW_EVT);
-		if(GoToCalibrateBtn)
+			GoToLiveViewBtn = 0;
+		}
+		if(GoToCalibrateBtn){
+			OscLog(INFO, "GoToCalibrateBtn\n");
 			ThrowEvent(&mainState, GO_TO_CALIBRATION_EVT);
-		if(GetNewGridBtn)
+			GoToCalibrateBtn = 0;
+		}
+		if(GetNewGridBtn){
+			OscLog(INFO, "GetNewGridBtn\n");
 			ThrowEvent(&mainState, GET_NEW_GRID_EVT);
-		if(ImageReady)
+			GetNewGridBtn = 0;
+		}
+		if(ImageReady){
+			OscLog(INFO, "ImageReady\n");
 			ThrowEvent(&mainState, IMG_SEQ_EVT);
-		if(CalibrateCameraBtn)
+			ImageReady = 0;
+		}
+		if(CalibrateCameraBtn){
+			OscLog(INFO, "CalibrateCameraBtn\n");
 			ThrowEvent(&mainState, CALIBRATE_CAMERA_EVT);
-		if(UndistortGridBtn)
+			CalibrateCameraBtn = 0;
+		}
+		if(UndistortGridBtn){
+			OscLog(INFO, "UndistortGridBtn\n");
 			ThrowEvent(&mainState, UNDISTORT_GRID_EVT);
+			UndistortGridBtn = 0;
+		}
 
 		/* Advance the simulation step counter. */
 		//OscSimStep();
