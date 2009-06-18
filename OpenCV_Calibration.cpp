@@ -69,6 +69,7 @@ struct CV_CALIBRATION {
 
 struct CV_PERSPECTIVE {
     CvMat *H;
+    bool perspTransform;
     int Z;
 };
 
@@ -303,21 +304,36 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 
 struct CV_CALIBRATION saveModel (struct CV_CALIBRATION calib)
 {
+	if(calib.corners_found)
+	{
 	struct CV_CALIBRATION LVcalib;
 	// SAVE THE INTRINSICS AND DISTORTIONS
 	cvSave(IMAGE_DIRECTORY "Intrinsics.xml",calib.intrinsic_matrix);
 	cvSave(IMAGE_DIRECTORY "Distortion.xml",calib.distortion_coeffs);
 	LVcalib = calib;
 	return LVcalib;
+	}
+	else
+	{
+		OscLog(INFO, "No Calibration Corners found\n");
+	}
+
 }
 
 struct CV_PERSPECTIVE saveConfig (struct CV_PERSPECTIVE persp)
 {
+	if(persp.perspTransform)
+	{
 	struct CV_PERSPECTIVE LVpersp;
 	// SAVE THE HOMOGRAPHIE MATRIX
 	cvSave(IMAGE_DIRECTORY "H.xml", persp.H); // We can reuse H for the same camera mounting
 	LVpersp = persp;
 	return LVpersp;
+	}
+	else
+	{
+		OscLog(INFO, "Perspective Transformation not active\n");
+	}
 }
 
 struct CV_CALIBRATION loadModel ()
@@ -366,7 +382,7 @@ IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image)
 }
 
 
-struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION calib, int Z)
+struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION calib, int Z, bool perspTransform)
 {
     // Bird's Eye ------------------------------------------------------------
     // GET THE IMAGE AND OBJECT POINTS
@@ -376,6 +392,7 @@ struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION cali
 
 	struct CV_PERSPECTIVE persp;
 	persp.Z = Z;
+	persp.perspTransform = perspTransform;
 
     CvPoint2D32f objPts[4], imgPts[4];
     objPts[0].x = 0;			objPts[0].y = 0;
@@ -396,6 +413,8 @@ struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION cali
     // FIND THE HOMOGRAPHY
     persp.H = cvCreateMat( 3, 3, CV_32F);
 
+    if(persp.perspTransform)
+	{
     cvGetPerspectiveTransform( objPts, imgPts, persp.H);
 
     // LET THE USER ADJUST THE Z HEIGHT OF THE VIEW
@@ -403,7 +422,7 @@ struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION cali
 
     // Set the height
    	CV_MAT_ELEM(*persp.H, float, 2, 2) = persp.Z;//45;
-
+	}
     return persp;
 }
 
@@ -443,37 +462,7 @@ IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
 }
 
 
-IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image, bool persp_transform)
-{
-    // Undistortion ------------------------------------------------------------
 
-    // Build the undistort map that we will use for all
-    // subsequent frames.
-    //
-    IplImage* mapx = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
-    IplImage* mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
-
-    cvInitUndistortMap(
-    	calib.intrinsic_matrix,
-        calib.distortion_coeffs,
-        mapx,
-        mapy
-        );
-
-    if(image) {
-    	IplImage *t = cvCloneImage(image);
-        cvRemap( t, image, mapx, mapy );     // Undistort image
-        cvReleaseImage(&t);
-        //image = cvQueryFrame( capture );
-        }
-    if(persp_transform){
-    	struct CV_PERSPECTIVE persp;
-   	    int Z = 45;
-   	    persp = cmCalculatePerspectiveTransform(calib, Z);
-   	    image = cmPerspectiveTransform(persp, image);
-    }
-        return image;
-}
 
 
 void printModule()
@@ -499,7 +488,6 @@ int cvCalib(void) {
 	int n_boards = 1; 				// Number of chessboard views
 	int board_w = 6;				// Number of points horizontal
 	int board_h = 9;				// Number of points vertical
-	bool persp_transform = TRUE;
 
 	struct CV_CALIBRATION calib;
 	struct CV_PERSPECTIVE persp, LVpersp;
@@ -532,28 +520,42 @@ int cvCalib(void) {
     writeImage(undistFile, undistimage);
     SW_STOP("Undistort", startCyc);
 
+
     // All in one, undistortion and perspective transformation
     IplImage* gugu = readImage(srcFile);
-    gugu = cmUndistort(calib, gugu, persp_transform);
+    gugu = cmUndistort(calib, gugu);
     // Save undistorted image
     writeImage(allInOne, gugu);
 
     // TestImage for perspectiveTransform, function call in live-view mode
     IplImage* gaga = cvCloneImage(undistimage);
-    int Z = 45;
 
-    SW_START(startCyc);
+/*    SW_START(startCyc);
     persp = cmCalculatePerspectiveTransform(calib, Z);
     undistimage = cmPerspectiveTransform(persp, undistimage);
    	// Save birds_eye image
    	writeImage(perspTransFile, undistimage);
     SW_STOP("PerspectiveTransform", startCyc);
+*/
+    int Z = 45;
+	bool perspTransform = TRUE;//FALSE;
+	persp = cmCalculatePerspectiveTransform(calib, Z, perspTransform);
+    if(persp.perspTransform){
+   	    printf("was");
+    	gugu = cmPerspectiveTransform(persp, gugu);
+   	    // Save birds_eye image
+   	    writeImage(allInOne, gugu);
+    }
+
+
 
     // perspectiveTransform, function call in live-view mode
     LVpersp = saveConfig (persp);
+    if(LVpersp.perspTransform)
+    {
     gaga = PerspectiveTransform(LVpersp, gaga);
    	writeImage(test_perspTransFile, gaga);
-
+    }
 
 
 	// release the images

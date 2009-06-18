@@ -32,8 +32,6 @@ const Msg mainStateMsg[] = {
 	{ FRAMESEQ_EVT },
 	{ FRAMEPAR_EVT },
 	{ IPC_GET_APP_STATE_EVT },
-	{ MODEL_NOT_PRESENT_EVT },
-	{ MODEL_PRESENT_EVT },
 	{ SHOW_RAW_IMAGE_EVT },
 	{ SHOW_UNDIST_IMAGE_EVT },
 	{ GO_TO_LIVE_VIEW_EVT },
@@ -81,13 +79,26 @@ static OSC_ERR HandleIpcRequests(MainState *pMainState)
 
 Msg const *MainState_top(MainState *me, Msg *msg)
 {
+	bool ModelPresent = 0;
 	switch (msg->evt)
 	{
-	case MODEL_NOT_PRESENT_EVT:
-		STATE_START(me, &me->Raw);
+	/*
+	case ENTRY_EVT:
 		return 0;
-	case MODEL_PRESENT_EVT:
-		STATE_START(me, &me->Undistort);
+	*/
+	case START_EVT:
+		//STATE_START(me, &me->Undistort);
+		OscLog(INFO, "holy sh***\n");
+		if(ModelPresent)
+		{
+			//STATE_START(me, &me->Undistort);
+			OscLog(INFO, "ModelPresent\n");
+		}else
+		{
+			STATE_START(me, &me->UndistortGridAndShow);
+			OscLog(INFO, "ModelNotPresent\n");
+		}
+
 		return 0;
 	case FRAMESEQ_EVT:
 		return 0;
@@ -218,67 +229,44 @@ Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 void MainStateConstruct(MainState *me)
 {
 	//OscHsmCreate(hFramework);
-	/*
-	HsmCtor((Hsm *)me, "MainState", (EvtHndlr)MainState_top);
-	StateCtor(&me->captureRaw, "Capture Raw", &((Hsm *)me)->top, (EvtHndlr)MainState_CaptureRaw);
-	StateCtor(&me->captureColor, "Capture Color", &((Hsm *)me)->top, (EvtHndlr)MainState_CaptureColor);
-	*/
+
 	HsmCtor((Hsm *)me, "MainState", (EvtHndlr)MainState_top);
 
-	//StateCtor(&me->Initial, "Initial", &((Hsm *)&me)->top, (EvtHndlr)MainState_Initial);
-	StateCtor(&me->LiveViewMode, "Live-view Mode", &((Hsm *)&me)->top, (EvtHndlr)MainState_LiveViewMode);
-	StateCtor(&me->CalibrationMode, "Calibration Mode", &((Hsm *)&me)->top, (EvtHndlr)MainState_CalibrationMode);
-	StateCtor(&me->Raw, "Raw",&me->LiveViewMode, (EvtHndlr)MainState_Raw);
-	StateCtor(&me->Undistort, "Undistort",&me->LiveViewMode, (EvtHndlr)MainState_Undistort);
-	StateCtor(&me->WaitForGrid, "Wait for Grid",&me->CalibrationMode, (EvtHndlr)MainState_WaitForGrid);
-	StateCtor(&me->ShowGrid, "Show Grid",&me->CalibrationMode, (EvtHndlr)MainState_ShowGrid);
-	StateCtor(&me->CalibrateCamera, "Calibrate Camera",&me->CalibrationMode, (EvtHndlr)MainState_CalibrateCamera);
-	StateCtor(&me->UndistortGridAndShow, "Undistort Grid and Show",&me->CalibrationMode, (EvtHndlr)MainState_UndistortGridAndShow);
+	StateCtor(&me->LiveViewMode, "Live-view Mode", &((Hsm *)me)->top, (EvtHndlr)MainState_LiveViewMode);
+	StateCtor(&me->CalibrationMode, "Calibration Mode", &((Hsm *)me)->top, (EvtHndlr)MainState_CalibrationMode);
+	StateCtor(&me->Raw, "Raw", &me->LiveViewMode, (EvtHndlr)MainState_Raw);
+	StateCtor(&me->Undistort, "Undistort", &me->LiveViewMode, (EvtHndlr)MainState_Undistort);
+	StateCtor(&me->WaitForGrid, "Wait for Grid", &me->CalibrationMode, (EvtHndlr)MainState_WaitForGrid);
+	StateCtor(&me->ShowGrid, "Show Grid", &me->CalibrationMode, (EvtHndlr)MainState_ShowGrid);
+	StateCtor(&me->CalibrateCamera, "Calibrate Camera", &me->CalibrationMode, (EvtHndlr)MainState_CalibrateCamera);
+	StateCtor(&me->UndistortGridAndShow, "Undistort Grid and Show", &me->CalibrationMode, (EvtHndlr)MainState_UndistortGridAndShow);
 
 }
 
 
 OSC_ERR StateControl( void)
 {
-	// OSC_ERR camErr, err;
-
-	MainState mainState;
-	OscHsmCreate( data.hFramework);
+	//OscHsmCreate( data.hFramework);
 
 	/* Setup main state machine */
+	MainState mainState;
 	MainStateConstruct(&mainState);
-/*
-	HsmCtor((Hsm *)&mainState, "MainState", (EvtHndlr)MainState_top);
 
-	//StateCtor(&me->Initial, "Initial", &((Hsm *)&me)->top, (EvtHndlr)MainState_Initial);
-	StateCtor(&mainState.LiveViewMode, "Live-view Mode", &((Hsm *)&mainState)->top, (EvtHndlr)MainState_LiveViewMode);
-	StateCtor(&mainState.CalibrationMode, "Calibration Mode", &((Hsm *)&mainState)->top, (EvtHndlr)MainState_CalibrationMode);
-	StateCtor(&mainState.Raw, "Raw",&(&mainState)->LiveViewMode, (EvtHndlr)MainState_Raw);
-	StateCtor(&mainState.Undistort, "Undistort",&(&mainState)->LiveViewMode, (EvtHndlr)MainState_Undistort);
-	StateCtor(&mainState.WaitForGrid, "Wait for Grid",&(&mainState)->CalibrationMode, (EvtHndlr)MainState_WaitForGrid);
-	StateCtor(&mainState.ShowGrid, "Show Grid",&(&mainState)->CalibrationMode, (EvtHndlr)MainState_ShowGrid);
-	StateCtor(&mainState.CalibrateCamera, "Calibrate Camera",&(&mainState)->CalibrationMode, (EvtHndlr)MainState_CalibrateCamera);
-	StateCtor(&mainState.UndistortGridAndShow, "Undistort Grid and Show",&(&mainState)->CalibrationMode, (EvtHndlr)MainState_UndistortGridAndShow);
-*/
 	HsmOnStart((Hsm *)&mainState);
+	//OscSimInitialize();
 
-	OscSimInitialize();
-
-	int ModelPresent = 0;
-	int ShowRawImageBtn = 1;
-	int ShowUndistImageBtn, GoToLiveViewBtn, GoToCalibrateBtn, GetNewGridBtn, ImageReady,
-		CalibrateCameraBtn, UndistortGridBtn;
+	bool ShowRawImageBtn = 1;
+	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 0, GoToCalibrateBtn = 0, GetNewGridBtn = 0, ImageReady = 0,
+		 CalibrateCameraBtn = 0, UndistortGridBtn = 0;
 
 	/*----------- infinite main loop */
 	while (TRUE)
 	{
-		if(!ModelPresent)
-				ThrowEvent(&mainState, MODEL_NOT_PRESENT_EVT);
-		if(ModelPresent)
-			ThrowEvent(&mainState, MODEL_PRESENT_EVT);
-		if(ShowRawImageBtn)
+		if(ShowRawImageBtn){
 			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
-				OscLog(INFO, "ShowRawImageBtn\n");
+			OscLog(INFO, "ShowRawImageBtn\n");
+			ShowRawImageBtn = 0;
+		}
 		if(ShowUndistImageBtn)
 			ThrowEvent(&mainState, SHOW_UNDIST_IMAGE_EVT);
 		if(GoToLiveViewBtn)
@@ -295,9 +283,9 @@ OSC_ERR StateControl( void)
 			ThrowEvent(&mainState, UNDISTORT_GRID_EVT);
 
 		/* Advance the simulation step counter. */
-		OscSimStep();
+		//OscSimStep();
 	} /* end while ever */
 
 	return SUCCESS;
-	OscHsmDestroy( data.hFramework);
+	//OscHsmDestroy( data.hFramework);
 }
