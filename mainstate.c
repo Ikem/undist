@@ -97,17 +97,13 @@ Msg const *MainState_top(MainState *me, Msg *msg)
 		OscLog(INFO, "Start Event\n");
 		if(ModelPresent)
 		{
-			STATE_START(me, &me->Undistort);
 			OscLog(INFO, "ModelPresent\n");
+			STATE_START(me, &me->Undistort);
 		}else
 		{
-			STATE_START(me, &me->Raw);
 			OscLog(INFO, "ModelNotPresent\n");
+			STATE_START(me, &me->Raw);
 		}
-
-		return 0;
-	case SHOW_RAW_IMAGE_EVT:
-		STATE_TRAN(me, &me->Raw);
 		return 0;
 	case FRAMESEQ_EVT:
 		return 0;
@@ -130,6 +126,14 @@ Msg const *MainState_LiveViewMode(MainState *me, Msg *msg)
 		OscLog(INFO, "GO_TO_CALIBRATION_EVT\n");
 		STATE_TRAN(me, &me->CalibrationMode);
 		return 0;
+	case SHOW_RAW_IMAGE_EVT:
+		OscLog(INFO, "SHOW_RAW_IMAGE_EVT\n");
+		STATE_TRAN(me, &me->Raw);
+		return 0;
+	case SHOW_UNDIST_IMAGE_EVT:
+		OscLog(INFO, "SHOW_UNDIST_IMAGE_EVT\n");
+		STATE_TRAN(me, &me->Undistort);
+		return 0;
 	}
 	return msg;
 }
@@ -143,7 +147,8 @@ Msg const *MainState_CalibrationMode(MainState *me, Msg *msg)
 		return 0;
 	case GO_TO_LIVE_VIEW_EVT:
 		OscLog(INFO, "GO_TO_LIVE_VIEW_EVT\n");
-		STATE_TRAN(me, &me->Undistort);
+		STATE_TRAN(me, &me->LiveViewMode);
+		return 0;
 	case GET_NEW_GRID_EVT:
 		OscLog(INFO, "GET_NEW_GRID_EVT\n");
 		STATE_TRAN(me, &me->WaitForGrid);
@@ -158,10 +163,6 @@ Msg const *MainState_Raw(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State Raw!\n");
-		return 0;
-	case SHOW_UNDIST_IMAGE_EVT:
-		OscLog(INFO, "SHOW_UNDIST_IMAGE_EVT\n");
-		STATE_TRAN(me, &me->Undistort);
 		return 0;
 	}
 	return msg;
@@ -249,7 +250,7 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 {
 	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
-	const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
+	//const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
@@ -262,7 +263,7 @@ Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 		{
 			image.perspTrans = cmPerspectiveTransform(persp, image.undistort);
 			// Save birds_eye image
-			writeImage(perspTransFile, image.perspTrans);
+			writeImage(undistFile, image.perspTrans);
 		}
 		return 0;
 	}
@@ -303,9 +304,6 @@ int readLine(MainState*  mainState) {
 	if (n > 0) {
 		//printf("%d: %s %d %d %d %d %d\n", n, command, args[0], args[1], args[2], args[3], args[4]);
 
-/*		if (strcmp(command, "show-raw") == 0) {
-			printf("%s", "ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);");
-		}*/
 		if(strcmp(command, "show-raw") == 0){
 			OscLog(INFO, "ShowRawImageBtn\n");
 			ThrowEvent(mainState, SHOW_RAW_IMAGE_EVT);
@@ -352,10 +350,10 @@ OSC_ERR StateControl( void)
 	HsmOnStart((Hsm *)&mainState);
 	//OscSimInitialize();
 
-
 	bool ShowRawImageBtn = 1;
-	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 0, GoToCalibrateBtn = 1, GetNewGridBtn = 1, ImageReady = 1,
-		 CalibrateCameraBtn = 1, UndistortGridBtn = 1;
+	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 1, GoToCalibrateBtn = 1, GetNewGridBtn = 0, ImageReady = 0,
+		 CalibrateCameraBtn = 0, UndistortGridBtn = 0;
+
 
 	/*----------- infinite main loop */
 	/*	Enters in state Raw and then goes to state CalibrationMode and follows all states to calibrate and
@@ -374,7 +372,7 @@ OSC_ERR StateControl( void)
 		calib.board_h = 9;				// Number of points vertical
 
 	    persp.Z = 45;
-		persp.perspTransform = TRUE;//FALSE;
+		persp.perspTransform = FALSE;//FALSE;
 
 		readLine(&mainState);
 
@@ -384,47 +382,26 @@ OSC_ERR StateControl( void)
 
 
 	// ----------------------------------------------------------------------------------------------------
-/*		if(ShowRawImageBtn){
+
+/*
+		if(ShowRawImageBtn){
 			OscLog(INFO, "ShowRawImageBtn\n");
 			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
 			ShowRawImageBtn = 0;
 		}
-		if(ShowUndistImageBtn){
-			OscLog(INFO, "ShowUndistImageBtn\n");
-			ThrowEvent(&mainState, SHOW_UNDIST_IMAGE_EVT);
-			ShowUndistImageBtn = 0;
-		}
-		if(GoToLiveViewBtn){
-			OscLog(INFO, "GoToLiveViewBtn\n");
-			ThrowEvent(&mainState, GO_TO_LIVE_VIEW_EVT);
-			GoToLiveViewBtn = 0;
-		}
+
 		if(GoToCalibrateBtn){
 			OscLog(INFO, "GoToCalibrateBtn\n");
 			ThrowEvent(&mainState, GO_TO_CALIBRATION_EVT);
 			GoToCalibrateBtn = 0;
 		}
-		if(GetNewGridBtn){
-			OscLog(INFO, "GetNewGridBtn\n");
-			ThrowEvent(&mainState, GET_NEW_GRID_EVT);
-			GetNewGridBtn = 0;
+
+		if(GoToLiveViewBtn){
+			OscLog(INFO, "GoToLiveViewBtn\n");
+			ThrowEvent(&mainState, GO_TO_LIVE_VIEW_EVT);//GET_NEW_GRID_EVT);
+			GoToLiveViewBtn = 0;
 		}
-		if(ImageReady){
-			OscLog(INFO, "ImageReady\n");
-			ThrowEvent(&mainState, IMG_SEQ_EVT);
-			ImageReady = 0;
-		}
-		if(CalibrateCameraBtn){
-			OscLog(INFO, "CalibrateCameraBtn\n");
-			ThrowEvent(&mainState, CALIBRATE_CAMERA_EVT);
-			CalibrateCameraBtn = 0;
-		}
-		if(UndistortGridBtn){
-			OscLog(INFO, "UndistortGridBtn\n");
-			ThrowEvent(&mainState, UNDISTORT_GRID_EVT);
-			UndistortGridBtn = 0;
-		}
-		*/
+*/
 		/* Advance the simulation step counter. */
 		//OscSimStep();
 	} /* end while ever */
