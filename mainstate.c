@@ -43,7 +43,8 @@ const Msg mainStateMsg[] = {
 	{ GET_NEW_GRID_EVT },
 	{ IMG_SEQ_EVT },
 	{ CALIBRATE_CAMERA_EVT },
-	{ UNDISTORT_GRID_EVT }
+	{ UNDISTORT_GRID_EVT },
+	{ SAVE_MODEL_CONFIG_EVT }
 };
 
 /*********************************************************************//*!
@@ -227,6 +228,8 @@ Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 			// Save birds_eye image
 			writeImage(undistFile, image.undistort);
 		}
+		return 0;
+	case SAVE_MODEL_CONFIG_EVT:
 		saveConfig(persp);
 		saveModel(calib);
 		return 0;
@@ -342,10 +345,39 @@ static OSC_ERR HandleIpcRequests(MainState *pMainState)
 			break;
 		case SET_UNDISTORT_ACTIVE:
 			persp.undistort = *(bool *) data.ipc.req.pAddr;
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
 			break;
 		case GET_APP_STATE:
 			memcpy(data.ipc.req.pAddr, (void *) &data.ipc.state, sizeof(data.ipc.state));
 		//	*((void **) data.ipc.req.pAddr) = (void *) &data.ipc.state;
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case GET_NEW_GRID:
+			OscLog(ERROR, "GetNewGridBtn\n");
+			enum imageSource imgSrc = *(enum imageSource *) data.ipc.req.pAddr;
+			button.readFile = imgSrc == imageSource_file;
+			ThrowEvent(pMainState, GET_NEW_GRID_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case CALIBRATE_CAMERA:
+			OscLog(ERROR, "CalibrateCameraBtn\n");
+			struct CALIBRATE_CAMERA camCalib = *(struct CALIBRATE_CAMERA *) data.ipc.req.pAddr;
+			calib.board_w = camCalib.boardW;
+			calib.board_h = camCalib.boardH;
+			ThrowEvent(pMainState, CALIBRATE_CAMERA_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case UNDISTORT_GRID:
+			OscLog(ERROR, "UndistortGridBtn\n");
+			struct UNDISTORT_GRID undistGrid = *(struct UNDISTORT_GRID *) data.ipc.req.pAddr;
+			persp.perspTransform = undistGrid.perspTransform;
+			persp.Z = undistGrid.Z;
+			ThrowEvent(pMainState, UNDISTORT_GRID_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case SAVE_MODEL_CONFIG:
+			OscLog(ERROR, "SaveModelConfigBtn\n");
+			ThrowEvent(pMainState, SAVE_MODEL_CONFIG_EVT);
 			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
 			break;
 		default:

@@ -32,7 +32,11 @@ enum EnIpcParamIds
 	GET_APP_STATE,
 	GO_TO_LIVE_VIEW_MODE,
 	GO_TO_CALIBRATION_MODE,
-	SET_UNDISTORT_ACTIVE
+	SET_UNDISTORT_ACTIVE,
+	GET_NEW_GRID,
+	CALIBRATE_CAMERA,
+	UNDISTORT_GRID,
+	SAVE_MODEL_CONFIG
 };
 
 /*! @brief The path of the unix domain socket used for IPC between the application and its user interface. */
@@ -51,14 +55,6 @@ struct IMG_RECT
 	uint16 yPos;
 };
 
-/*! @brief The different modes the application can be in. */
-enum EnAppMode
-{
-	APP_OFF,
-	APP_CAPTURE_COLOR,
-	APP_CAPTURE_RAW
-};
-
 /*! @brief Object describing all the state information the web interface needs to know about the application. */
 struct APPLICATION_STATE
 {
@@ -67,6 +63,22 @@ struct APPLICATION_STATE
 		appMode_LiveViewMode,
 		appMode_CalibrationMode
 	} appMode;
+};
+
+enum imageSource {
+	imageSource_file,
+	imageSource_sensor
+};
+
+struct CALIBRATE_CAMERA
+{
+	int boardW, boardH;
+};
+
+struct UNDISTORT_GRID
+{
+	bool perspTransform;
+	int Z;
 };
 
 #endif /*TEMPLATE_IPC_H_*/

@@ -343,6 +343,73 @@ OSC_ERR handleRequest() {
 		} else {
 			printf("appMode: %d\n", appState.appMode);
 		}
+	} else if (strcmp(header, "GetNewGridBtn") == 0) {
+		enum imageSource imgSrc;
+		char * key, * value;
+
+		while (true) {
+			err = getArgument(&key, &value);
+			if (err != SUCCESS)
+				break;
+
+			if (strcmp(key, "imageSource") == 0) {
+				if (strcmp(value, "file") == 0)
+					imgSrc = imageSource_file;
+				else if (strcmp(value, "sensor") == 0)
+					imgSrc = imageSource_sensor;
+			}
+		}
+
+		err = OscIpcSetParam(cgi.ipcChan, &imgSrc, GET_NEW_GRID, sizeof imgSrc);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting app state! (%d)\n", err);
+			return err;
+		}
+	} else if (strcmp(header, "CalibrateCameraBtn") == 0) {
+		struct CALIBRATE_CAMERA camCalib;
+		char * key, * value;
+
+		while (true) {
+			err = getArgument(&key, &value);
+			if (err != SUCCESS)
+				break;
+
+			if (strcmp(key, "boardW") == 0)
+				camCalib.boardW = atoi(value);
+			else if (strcmp(key, "boardH") == 0)
+				camCalib.boardH = atoi(value);
+		}
+
+		err = OscIpcSetParam(cgi.ipcChan, &camCalib, CALIBRATE_CAMERA, sizeof camCalib);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting app state! (%d)\n", err);
+			return err;
+		}
+	} else if (strcmp(header, "UndistortGridBtn") == 0) {
+		struct UNDISTORT_GRID undistGrid;
+		char * key, * value;
+
+		while (true) {
+			err = getArgument(&key, &value);
+			if (err != SUCCESS)
+				break;
+
+			if (strcmp(key, "perspTransform") == 0)
+				undistGrid.perspTransform = strcmp(value, "true") == 0;
+			else if (strcmp(key, "Z") == 0)
+				undistGrid.Z = atoi(value);
+		}
+
+		err = OscIpcSetParam(cgi.ipcChan, &undistGrid, UNDISTORT_GRID, sizeof undistGrid);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting app state! (%d)\n", err);
+			return err;
+		}
+	} else if (strcmp(header, "SaveModelConfigBtn") == 0) {
+		err = OscIpcGetParam(cgi.ipcChan, &dummy, SAVE_MODEL_CONFIG, sizeof dummy);
 	} else {
 		return -1;
 	}
