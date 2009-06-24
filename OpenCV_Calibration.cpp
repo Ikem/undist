@@ -133,6 +133,92 @@ fail:
 	return NULL;
 }
 
+OSC_ERR captureImage(IplImage * image)
+{
+	OSC_ERR err = SUCCESS;
+	static uint8_t buffer[OSC_CAM_MAX_IMAGE_WIDTH * OSC_CAM_MAX_IMAGE_HEIGHT];
+	static uint8_t bufferColor[OSC_CAM_MAX_IMAGE_WIDTH * OSC_CAM_MAX_IMAGE_HEIGHT * 3];
+
+	struct OSC_PICTURE original;
+	struct OSC_PICTURE gray;
+	//struct OSC_PICTURE * original = NULL;
+	//struct OSC_PICTURE * gray = NULL;
+	uint8_t * pBuffer;
+
+	original.data = buffer;
+	original.width = OSC_CAM_MAX_IMAGE_WIDTH;
+	original.height = OSC_CAM_MAX_IMAGE_HEIGHT;
+	original.type = OSC_PICTURE_GREYSCALE;
+
+	gray.data = image->imageData;
+	gray.width = image->width;
+	gray.height = image->height;
+	gray.type = OSC_PICTURE_GREYSCALE;
+
+	if(button.readFile)
+	{
+		OscLog(INFO, "Read form file\n");
+		err = OscBmpRead(&original, IMAGE_DIRECTORY "left12.bmp");
+		if (err != SUCCESS)
+		{
+			OscLog(ERROR, "%s: Problem reading the image!\n", __func__);
+			return err;
+		}
+	}
+	else
+	{
+		OscLog(INFO, "Read image from sensor\n");
+		/* Set up two frame buffers with enough space for the maximum
+		 * camera resolution in cached memory. */
+		//err = OscCamSetFrameBuffer(0, sizeof buffer, buffer, true);
+		err = OscCamSetFrameBuffer(0, OSC_CAM_MAX_IMAGE_WIDTH*OSC_CAM_MAX_IMAGE_HEIGHT, buffer, TRUE);
+		if (err == -EFRAME_BUFFER_BUSY) {
+		}
+		else if (err != SUCCESS)
+		{
+			OscLog(ERROR, "%s: Unable to set up first frame buffer!\n", __func__);
+			return err;
+		}
+
+		/*----------- initial capture preparation*/
+		err = OscCamSetupCapture(0);
+		if (err != SUCCESS)
+		{
+			OscLog(ERROR, "%s: Unable to setup initial capture (%d)!\n", __func__, err);
+			return err;
+		}
+
+		err = OscGpioTriggerImage();
+		if (err != SUCCESS)
+		{
+			OscLog(ERROR, "%s: Unable to trigger initial capture (%d)!\n", __func__, err);
+			return err;
+		}
+
+		err = OscCamReadPicture(0, &pBuffer, 0, 0);
+		if (err != SUCCESS)
+		{
+			OscLog(ERROR, "%s: Unable to read the image (%d)!\n", __func__, err);
+			return err;
+		}
+	}//#endif /* defined(OSC_SIM) */
+
+/*	err = OscVisVectorDebayerGrey(&original, &gray);
+	if (err != SUCCESS)
+	{
+		OscLog(ERROR, "%s: Unable to debayer the image (%d)!\n", __func__, err);
+		return err;
+	}*/
+
+	OscVisDebayer((uint8 *) original.data, original.width, original.height, ROW_BGBG, bufferColor);
+
+	for (int i = 0; i < original.width * original.height; i += 1)
+		((uint8_t *) gray.data)[i] = ((uint16_t) bufferColor[3 * i] + bufferColor[3 * i + 1] + bufferColor[3 * i + 2]) / 3;
+
+
+    return SUCCESS;
+}
+
 
 OSC_ERR writeImage(const char * srcImage, IplImage * image)
 {
@@ -287,16 +373,15 @@ IplImage* cmDrawChessboardCorners(IplImage* image, struct CV_CALIBRATION calib)
 }
 
 
-struct CV_CALIBRATION saveModel (struct CV_CALIBRATION calib)
+void saveModel (struct CV_CALIBRATION calib)
 {
 	if(calib.corners_found)
 	{
-	struct CV_CALIBRATION LVcalib;
-	// SAVE THE INTRINSICS AND DISTORTIONS
-	cvSave(IMAGE_DIRECTORY "Intrinsics.xml",calib.intrinsic_matrix);
-	cvSave(IMAGE_DIRECTORY "Distortion.xml",calib.distortion_coeffs);
-	LVcalib = calib;
-	return LVcalib;
+		// SAVE THE INTRINSICS AND DISTORTIONS
+		cvSave(IMAGE_DIRECTORY "Intrinsics.xml",calib.intrinsic_matrix);
+		cvSave(IMAGE_DIRECTORY "Distortion.xml",calib.distortion_coeffs);
+	//	cvSave(IMAGE_DIRECTORY "mapx.xml",undist.mapx);
+	//	cvSave(IMAGE_DIRECTORY "mapy.xml",undist.mapy);
 	}
 	else
 	{
@@ -305,15 +390,33 @@ struct CV_CALIBRATION saveModel (struct CV_CALIBRATION calib)
 
 }
 
-struct CV_PERSPECTIVE saveConfig (struct CV_PERSPECTIVE persp)
+void saveConfig (struct CV_PERSPECTIVE persp)
 {
+	// ----------------------------------------------------
+	// variable declaration
+	struct CFG_KEY key;
+	CFG_FILE_CONTENT_HANDLE hCfgHandle;
+	const char* fileName = IMAGE_DIRECTORY "config.txt";
+
+	// register file and read it to memory
+	OscCfgRegisterFile(&hCfgHandle, fileName, 256);
+
+	key.strSection = NULL;
+	key.strTag = "perspTransform";
+
+	OscCfgSetBool(hCfgHandle, &key, persp.perspTransform );
+	OscCfgFlushContent(hCfgHandle);
+
+	key.strTag = "undistort";
+
+	OscCfgSetBool(hCfgHandle, &key, persp.undistort );
+	OscCfgFlushContent(hCfgHandle);
+	// -----------------------------------------------------
+
 	if(persp.perspTransform)
 	{
-	struct CV_PERSPECTIVE LVpersp;
-	// SAVE THE HOMOGRAPHIE MATRIX
-	cvSave(IMAGE_DIRECTORY "H.xml", persp.H); // We can reuse H for the same camera mounting
-	LVpersp = persp;
-	return LVpersp;
+		// SAVE THE HOMOGRAPHIE MATRIX
+		cvSave(IMAGE_DIRECTORY "H.xml", persp.H); // We can reuse H for the same camera mounting
 	}
 	else
 	{
@@ -332,37 +435,62 @@ struct CV_CALIBRATION loadModel ()
 
 struct CV_PERSPECTIVE loadConfig ()
 {
-	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
 	struct CV_PERSPECTIVE persp;
+	// ----------------------------------------------------
+	// variable declaration
+	struct CFG_KEY key;
+	CFG_FILE_CONTENT_HANDLE hCfgHandle;
+	const char* fileName = IMAGE_DIRECTORY "config.txt";
+
+	// register file and read it to memory
+	OscCfgRegisterFile(&hCfgHandle, fileName, 256);
+
+	key.strSection = NULL;
+	key.strTag = "perspTransform";
+
+	OscCfgGetBool(hCfgHandle, &key, &persp.perspTransform, FALSE);
+
+	key.strTag = "undistort";
+
+	OscCfgGetBool(hCfgHandle, &key, &persp.undistort, FALSE);
+	// -----------------------------------------------------
+
+	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
 	persp.H = (CvMat*)cvLoad(IMAGE_DIRECTORY "H.xml");
 	return persp;
 }
 
 
 
-IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image)
+struct CV_UNDISTORT cmCalibrateUndistort(struct CV_CALIBRATION calib, IplImage * image)
 {
     // Undistortion ------------------------------------------------------------
 
     // Build the undistort map that we will use for all
     // subsequent frames.
     //
-    IplImage* mapx = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
-    IplImage* mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+	struct CV_UNDISTORT undist;
+	undist.mapx = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
+    undist.mapy = cvCreateImage( cvGetSize(image), IPL_DEPTH_32F, 1 );
 
     cvInitUndistortMap(
     	calib.intrinsic_matrix,
         calib.distortion_coeffs,
-        mapx,
-        mapy
+        undist.mapx,
+        undist.mapy
         );
 
+    return undist;
+}
+
+IplImage* cmUndistort(struct CV_UNDISTORT undist, IplImage * image)
+{
     if(image) {
     	IplImage *t = cvCloneImage(image);
-        cvRemap( t, image, mapx, mapy );     // Undistort image
+        cvRemap( t, image, undist.mapx, undist.mapy );     // Undistort image
         cvReleaseImage(&t);
         //image = cvQueryFrame( capture );
-        }
+    }
     return image;
 }
 
@@ -411,28 +539,10 @@ struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION cali
     return persp;
 }
 
-
-IplImage* PerspectiveTransform(struct CV_PERSPECTIVE LVpersp, IplImage* image)
-{
-    IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
-
-  	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
-    // USING HOMOGRAPHY TO REMAP THE VIEW
-    cvWarpPerspective(  image,
-       	        		birds_image,
-       	        		LVpersp.H,
-       	        		CV_INTER_LINEAR | CV_WARP_INVERSE_MAP | CV_WARP_FILL_OUTLIERS
-       	        		);
-
-	return birds_image;
-    cvReleaseImage( &birds_image );
-}
-
-
 IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
 {
     //IplImage* birds_image = cvCloneImage(image);
-    IplImage* birds_image = cvCreateImage(cvSize(752,480),IPL_DEPTH_8U,1);
+    IplImage* birds_image = cvCreateImage(cvGetSize(image),IPL_DEPTH_8U,1);
 
   	// COMPUTE THE FRONTAL PARALLEL OR BIRD'S-EYE VIEW:
     // USING HOMOGRAPHY TO REMAP THE VIEW
@@ -443,7 +553,6 @@ IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
        	        		);
 
 	return birds_image;
-    cvReleaseImage( &birds_image );
 }
 
 
@@ -458,6 +567,7 @@ void printModule()
     printf("Libraries: %s\nModules: %s\n", libraries, modules);
 }
 
+#if 0
 int cvCalib(void) {
 
 //	#define MODULE
@@ -535,12 +645,12 @@ int cvCalib(void) {
 
 
     // perspectiveTransform, function call in live-view mode
-    LVpersp = saveConfig (persp);
-    if(LVpersp.perspTransform)
-    {
-    gaga = PerspectiveTransform(LVpersp, gaga);
-   	writeImage(test_perspTransFile, gaga);
-    }
+    //LVpersp = saveConfig (persp);
+    //if(LVpersp.perspTransform)
+    //{
+    //gaga = PerspectiveTransform(LVpersp, gaga);
+   	//writeImage(test_perspTransFile, gaga);
+    //}
 
 
 	// release the images
@@ -551,3 +661,4 @@ int cvCalib(void) {
 
     return 0;
 }
+#endif

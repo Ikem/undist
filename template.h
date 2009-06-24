@@ -35,8 +35,13 @@
 /*! @brief Timeout (ms) when waiting for a new picture. */
 #define CAMERA_TIMEOUT 1
 
-/*! @brief The file name of the test image on the host. */
-#define TEST_IMAGE_FN "test.bmp"
+#if defined(OSC_HOST)
+#define IMAGE_DIRECTORY "/home/mike/undist/"
+#endif
+
+#if defined(OSC_TARGET)
+#define IMAGE_DIRECTORY "/home/httpd/"
+#endif
 
 /*------------------- Main data object and members ------------------*/
 
@@ -77,11 +82,8 @@ struct TEMPLATE
 	void *hFramework;
 	/*! @brief Camera-Scene perspective */
 	enum EnOscCamPerspective perspective;
-
-#if defined(OSC_HOST) || defined(OSC_SIM)
 	/*! @brief File name reader for camera images on the host. */
 	void *hFileNameReader;
-#endif /* OSC_HOST or OSC_SIM */
 	/*! @brief The last raw image captured. Always points to one of the frame
 	 * buffers. */
 	uint8* pCurRawImg;

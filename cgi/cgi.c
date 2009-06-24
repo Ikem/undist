@@ -1,16 +1,16 @@
 /*	A collection of example applications for the LeanXcam platform.
 	Copyright (C) 2008 Supercomputing Systems AG
-	
+
 	This library is free software; you can redistribute it and/or modify it
 	under the terms of the GNU Lesser General Public License as published by
 	the Free Software Foundation; either version 2.1 of the License, or (at
 	your option) any later version.
-	
+
 	This library is distributed in the hope that it will be useful, but
 	WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU Lesser
 	General Public License for more details.
-	
+
 	You should have received a copy of the GNU Lesser General Public License
 	along with this library; if not, write to the Free Software Foundation,
 	Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
@@ -44,25 +44,25 @@ struct ARGUMENT args[] =
 /*! @brief Strips whiltespace from the beginning and the end of a string and returns the new beginning of the string. Be advised, that the original string gets mangled! */
 char * strtrim(char * str) {
 	char * end = strchr(str, 0) - 1;
-	
+
 	while (*str != 0 && strchr(" \t\n", *str) != NULL)
 		str += 1;
-	
+
 	while (end > str && strchr(" \t\n", *end) != NULL)
 		end -= 1;
-	
+
 	*(end + 1) = 0;
-	
+
 	return str;
 }
 
 /*********************************************************************//*!
  * @brief Split the supplied URI string into arguments and parse them.
- * 
+ *
  * Matches the argument string with the arguments list (args) and fills in
  * their values. Unknown arguments provoke an error, but missing
  * arguments are just ignored.
- * 
+ *
  * @param strSrc The argument string.
  * @param srcLen The length of the argument string.
  * @return SUCCESS or an appropriate error code otherwise
@@ -70,15 +70,15 @@ char * strtrim(char * str) {
 static OSC_ERR CGIParseArguments()
 {
 	char buffer[1024];
-	
+
 	/* Intialize all arguments as 'not supplied' */
 	for (int i = 0; i < sizeof args / sizeof (struct ARGUMENT); i += 1)
 		*args[i].pbSupplied = false;
-	
+
 	while (fgets (buffer, sizeof buffer, stdin)) {
 		struct ARGUMENT *pArg = NULL;
 		char * key, * value = strchr(buffer, ':');
-		
+
 		if (value == NULL) {
 			OscLog(ERROR, "%s: Invalid line: \"%s\"\n", __func__, buffer);
 			return -EINVALID_PARAMETER;
@@ -86,17 +86,17 @@ static OSC_ERR CGIParseArguments()
 
 		*value = 0;
 		value += 1;
-		
+
 		key = strtrim(buffer);
 		value = strtrim(value);
-				
+
 		for (int i = 0; i < sizeof(args)/sizeof(struct ARGUMENT); i += 1) {
 			if (strcmp(args[i].strName, key) == 0) {
 				pArg = args + i;
 				break;
 			}
 		}
-		
+
 		if (pArg == NULL) {
 			OscLog(ERROR, "%s: Unknown argument encountered: \"%s\"\n", __func__, key);
 			return -EINVALID_PARAMETER;
@@ -124,29 +124,30 @@ static OSC_ERR CGIParseArguments()
 					return -EINVALID_PARAMETER;
 				}
 			}
-			
+
 			if (pArg->pbSupplied != NULL)
 				*pArg->pbSupplied = true;
 		}
 	}
-		
+
 	return SUCCESS;
 }
 
 /*********************************************************************//*!
  * @brief Query the current state of the application and see what else
  * we need to get from it
- * 
+ *
  * Depending on the current state of the application, other additional
  * parameters may be queried.
- * 
+ *
  * @return SUCCESS or an appropriate error code otherwise
  *//*********************************************************************/
 static OSC_ERR QueryApp()
 {
 	OSC_ERR err;
 	struct OSC_PICTURE pic;
-	
+
+#if 0
 	/* First, get the current state of the algorithm. */
 	err = OscIpcGetParam(cgi.ipcChan, &cgi.appState, GET_APP_STATE, sizeof(struct APPLICATION_STATE));
 	if (err != SUCCESS)
@@ -155,7 +156,7 @@ static OSC_ERR QueryApp()
 		OscLog(ERROR, "CGI: Error querying application! (%d)\n", err);
 		return err;
 	}
-		
+
 	switch(cgi.appState.enAppMode)
 	{
 	case APP_OFF:
@@ -174,14 +175,14 @@ static OSC_ERR QueryApp()
 				OscLog(DEBUG, "CGI: Getting new image failed! (%d)\n", err);
 				return err;
 			}
-			
+
 			/* Write the image to the RAM file system where it can be picked
 			 * up by the webserver on request from the browser. */
 			pic.width = OSC_CAM_MAX_IMAGE_WIDTH;
 			pic.height = OSC_CAM_MAX_IMAGE_HEIGHT;
 			pic.type = OSC_PICTURE_BGR_24;
 			pic.data = (void*)cgi.imgBuf;
-			
+
 			return OscBmpWrite(&pic, IMG_FN);
 		}
 		break;
@@ -195,13 +196,13 @@ static OSC_ERR QueryApp()
 				OscLog(DEBUG, "CGI: Getting new image failed! (%d)\n", err);
 				return err;
 			}
-			
+
 			/* Write the image to the RAM file system where it can be picked up by the webserver on request from the browser. */
 			pic.width = OSC_CAM_MAX_IMAGE_WIDTH;
 			pic.height = OSC_CAM_MAX_IMAGE_HEIGHT;
 			pic.type = OSC_PICTURE_GREYSCALE;
 			pic.data = (void*)cgi.imgBuf;
-			
+
 			return OscBmpWrite(&pic, IMG_FN);
 		}
 		break;
@@ -209,20 +210,21 @@ static OSC_ERR QueryApp()
 		OscLog(ERROR, "%s: Invalid application mode (%d)!\n", __func__, cgi.appState.enAppMode);
 		break;
 	}
+#endif
 	return SUCCESS;
 }
 
 /*********************************************************************//*!
  * @brief Set the parameters for the application supplied by the web
  * interface.
- * 
+ *
  * @return SUCCESS or an appropriate error code otherwise
  *//*********************************************************************/
 static OSC_ERR SetOptions()
 {
 	OSC_ERR err;
 	struct ARGUMENT_DATA *pArgs = &cgi.args;
-	
+
 	if (pArgs->bDoCaptureColor_supplied)
 	{
 		err = OscIpcSetParam(cgi.ipcChan, &pArgs->bDoCaptureColor, SET_CAPTURE_MODE, sizeof(pArgs->bDoCaptureColor));
@@ -232,7 +234,7 @@ static OSC_ERR SetOptions()
 			return err;
 		}
 	}
-	
+
 	return SUCCESS;
 }
 
@@ -243,18 +245,88 @@ static OSC_ERR SetOptions()
 static void FormCGIResponse()
 {
 	struct APPLICATION_STATE  *pAppState = &cgi.appState;
-	
+
 	/* Header */
 	printf("Content-type: text/plain\n\n" );
-	
+
 	printf("imgTS: %u\n", (unsigned int)pAppState->imageTimeStamp);
-	
+
 	fflush(stdout);
+}
+
+OSC_ERR getHeader(char ** header) {
+	static char buffer[1024];
+	char * pBuffer;
+
+	if (fgets (buffer, sizeof buffer, stdin) == NULL)
+		return -EUNABLE_TO_READ;
+
+	pBuffer = strtrim(buffer);
+	*header = pBuffer;
+
+	return SUCCESS;
+}
+
+OSC_ERR getArgument(char ** pKey, char ** pValue) {
+	static char buffer[1024];
+	char * key, * value;
+
+	if (fgets (buffer, sizeof buffer, stdin) == NULL)
+		return -EUNABLE_TO_READ;
+
+	value = strchr(buffer, ':');
+
+	*value = 0;
+	value += 1;
+
+	key = strtrim(buffer);
+	value = strtrim(value);
+
+	*pKey = key;
+	*pValue = value;
+
+	return SUCCESS;
+}
+
+OSC_ERR handleRequest() {
+	OSC_ERR err = SUCCESS;
+	char * header;
+
+	printf("Line %d\n", __LINE__);
+
+	err = getHeader(&header);
+	if (err != SUCCESS)
+		return err;
+	printf("Line %d\n", __LINE__);
+
+	if (strcmp(header, "GoToLiveViewBtn") == 0) {
+		err = OscIpcSetParam(cgi.ipcChan, &dummy, GO_TO_LIVE_VIEW_MODE, sizeof dummy);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting option! (%d)\n", err);
+			return err;
+		}
+	} else if (strcmp(header, "GoToCalibrateBtn") == 0) {
+		err = OscIpcSetParam(cgi.ipcChan, &dummy, GO_TO_CALIBRATION_MODE, sizeof dummy);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting option! (%d)\n", err);
+			return err;
+		}
+	} else {
+		printf("Line %d\n", __LINE__);
+		return -1;
+	}
+
+	printf("Line %d\n", __LINE__);
+	printf("Content-type: text/plain\n\n" );
+
+	return SUCCESS;
 }
 
 /*********************************************************************//*!
  * @brief Execution starting point
- * 
+ *
  * Handles initialization, control and unloading.
  * @return 0 on success, -1 otherwise
  *//*********************************************************************/
@@ -264,11 +336,11 @@ int main()
 	int contentLen;
 	OSC_ERR err;
 	struct stat socketStat;
-	
+
 	/* Initialize */
-	
+
 	memset(&cgi, 0, sizeof(struct CGI_TEMPLATE));
-	
+
 	/* First, check if the algorithm is even running and ready for IPC
 	 * by looking if its socket exists.*/
 	if(stat(USER_INTERFACE_SOCKET_PATH, &socketStat) != 0)
@@ -278,13 +350,13 @@ int main()
 		cgi.appState.enAppMode = APP_OFF;
 		return 1;
 	}
-	
+
 	err = OscCreate(&cgi.hFramework);
 	if(err != SUCCESS)
 	{
 		return 1;
 	}
-	
+
 	err = OscLogCreate(cgi.hFramework);
 	if(err != SUCCESS)
 	{
@@ -293,7 +365,7 @@ int main()
 	}
 	OscLogSetConsoleLogLevel(CRITICAL);
 	OscLogSetFileLogLevel(DEBUG);
-	
+
 	err = OscIpcCreate(cgi.hFramework);
 	if(err != SUCCESS)
 	{
@@ -312,13 +384,18 @@ int main()
 		OscDestroy(cgi.hFramework);
 		return 1;
 	}
-	
+	printf("Line %d\n", __LINE__);
+
+	err = handleRequest();
+	printf("Line %d\n", __LINE__);
+
+#if 0
 	err = CGIParseArguments();
 	if(err != SUCCESS) {
 		OscLog(ERROR, "CGI: Error parsing command line arguments! \"%s\"\n", cgi.strArgumentsRaw);
 		goto exit_unload;
 	}
-	
+
 	/* The algorithm negative acknowledges if it cannot supply
 	 * the requested data, i.e. it changed state during the
 	 * process of getting the data.
@@ -329,7 +406,7 @@ int main()
 		{
 			err = QueryApp();
 		} while (err == -ENEGATIVE_ACKNOWLEDGE);
-		
+
 		if (err != SUCCESS)
 		{
 			OscLog(ERROR, "CGI: Error querying algorithm!\n");
@@ -338,6 +415,7 @@ int main()
 	err = SetOptions();
 	} while (err == -ENEGATIVE_ACKNOWLEDGE);
 	FormCGIResponse();
+#endif
 
 exit_unload:
 	/* Unload */

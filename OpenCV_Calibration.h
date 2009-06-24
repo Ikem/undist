@@ -33,15 +33,6 @@ typedef uint32_t uint32;
 #include "cxcore.h"
 #include "oscar.h"
 
-/*--------------------------- Settings ------------------------------*/
-#if defined(OSC_HOST)
-#define IMAGE_DIRECTORY "/home/mike/undist/"
-#endif
-
-#if defined(OSC_TARGET)
-#define IMAGE_DIRECTORY "/home/httpd/"
-#endif
-
 /*------------------- Main data object and members ------------------*/
 struct CV_CALIBRATION {
 	int board_w;
@@ -58,12 +49,21 @@ struct CV_CALIBRATION {
     CvMat* distortion_coeffs;
 }calib;
 
+struct CV_UNDISTORT{
+	IplImage* mapx;
+	IplImage* mapy;
+}undist;
+
 struct CV_PERSPECTIVE {
     CvMat *H;
     bool perspTransform;
     int Z;
+    bool undistort;
 }persp;
 
+struct BUTTON{
+	bool readFile;
+}button;
 
 /*-------------------------- Functions --------------------------------*/
 void createUndistFile(const char* directory, IplImage* mapx, IplImage* mapy );
@@ -72,19 +72,23 @@ IplImage* readImage(const char* srcImage);
 
 OSC_ERR writeImage(const char * srcImage, IplImage * image);
 
+OSC_ERR captureImage(IplImage * image);
+
 struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, IplImage* image );
 
 IplImage* cmDrawChessboardCorners(IplImage* image, struct CV_CALIBRATION calib);
 
-struct CV_CALIBRATION saveModel (struct CV_CALIBRATION calib);
+void saveModel (struct CV_CALIBRATION calib);
 
-struct CV_PERSPECTIVE saveConfig (struct CV_PERSPECTIVE persp);
+void saveConfig (struct CV_PERSPECTIVE persp);
 
 struct CV_CALIBRATION loadModel ();
 
 struct CV_PERSPECTIVE loadConfig ();
 
-IplImage* cmUndistort(struct CV_CALIBRATION calib, IplImage* image);
+struct CV_UNDISTORT cmCalibrateUndistort(struct CV_CALIBRATION calib, IplImage * image);
+
+IplImage* cmUndistort(struct CV_UNDISTORT undist, IplImage* image);
 
 struct CV_PERSPECTIVE cmCalculatePerspectiveTransform(struct CV_CALIBRATION calib, int Z, bool perspTransform);
 

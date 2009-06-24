@@ -37,17 +37,15 @@ enum MainStateEvents {
 */
 
 enum MainStateEvents {
-	FRAMESEQ_EVT,       		// frame ready to process (before setting up next frame capture)
-	FRAMEPAR_EVT,       		// frame ready to process (parallel to next capture)
 	IPC_GET_APP_STATE_EVT, 		// Webinterface asks for the current application state.
-	SHOW_RAW_IMAGE_EVT,
-	SHOW_UNDIST_IMAGE_EVT,
+	SHOW_CAMERA_IMAGE_EVT,
 	GO_TO_LIVE_VIEW_EVT,
 	GO_TO_CALIBRATION_EVT,
 	GET_NEW_GRID_EVT,
 	IMG_SEQ_EVT,
 	CALIBRATE_CAMERA_EVT,
-	UNDISTORT_GRID_EVT
+	UNDISTORT_GRID_EVT,
+	SAVE_MODEL_CONFIG_EVT
 };
 
 
@@ -56,7 +54,7 @@ typedef struct MainState {
 	Hsm super;
 	/* Declare all states and substates that are going to be used. */
 	State LiveViewMode, CalibrationMode;
-	State Raw, Undistort, WaitForGrid, ShowGrid, CalibrateCamera, UndistortGridAndShow;
+	State ShowCameraImage, WaitForGrid, CalibrateCamera, UndistortGridAndShow;
 } MainState;
 
 

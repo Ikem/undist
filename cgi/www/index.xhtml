@@ -13,8 +13,6 @@
 		<script src="js/functions.js"></script>
 		<script type="text/javascript"><![CDATA[
 			$(function () {
-				// Set the language to what is given by ?lang=<language>, defaulting to german.
-				setLanguage(getSearchArgs().lang || "de");
 				// Decompile input tags with content to an input and a separate label tag.
 				buildControls();
 				// Call the function that updates in- and output and eventually calls itself.
@@ -29,40 +27,41 @@
 					<img src="imgs/error.png" style="width: 64px" />
 				</span>
 				<span class="title">
-					<span lang="de">Applikation ist deaktiviert.</span>
-					<span lang="en">Application is offline.</span>
+					Application is offline.
 				</span>
 				<span>
 					<div>
 						<div class="wheel" />
 					</div>
 					<div class="message">
-						<span lang="de">Versuche mit der Applikation zu verbinden …</span>
-						<span lang="en">Trying to connect to the application …</span>
+						Trying to connect to the application …
 					</div>
 				</span>
 			</div>
 		</div>
-		<div id="lang-select">
-			<a href="javascript:setLanguage('de')" id="de">Deutsch</a>
-			<a href="javascript:setLanguage('en')" id="en">English</a>
+		<div id="live-view-mode" class="big-box">
+			<h3>Live view mode</h3>  
+			<div style="display:table-row; margin:0px">
+				<div style="display:table-cell; width:500px; vertical-align:top;">
+					<input type="checkbox" name="activate-undistort">Activate image undistortion</input>
+				</div>
+				<div style="display:table-cell">
+					<img src="left12.bmp" width="376" style="float:right; margin-bottom: 8px" />
+					<img src="left12.bmp" width="376" style="float:right;" />
+				</div>
+			</div>
 		</div>
-		<div class="big-box">
-			<h3>
-				<span lang="de">Livebild</span>
-				<span lang="en">Live Image</span>
-			</h3>
-			<div id="image" />
-		</div>
-		<div class="big-box" id="options-box">
-			<h3>
-				<span lang="de">Optionen</span>
-				<span lang="en">Options</span>
-			</h3>
-			<input name="DoCaptureColor" type="checkbox">
-				<span lang="de">Algorithmus anwenden</span>
-				<span lang="en">Apply algorithm</span>
-			</input>
+		<div id="calibration-mode" class="big-box">
+			<h3>Calibration mode</h3>
+			<div style="display:table-row; margin:0px">
+				<div style="display:table-cell; width:500px; vertical-align:top;">
+					mdslmflkdsmf
+				</div>
+				<div style="display:table-cell">
+					<img src="left12.bmp" width="376" style="float:right;" />
+				</div>
+			</div>
+			<span style="clear:both;">sdf</span>
 		</div>
 	</body>
 </html>

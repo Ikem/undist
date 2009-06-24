@@ -1,7 +1,10 @@
 # working files.
-/osc_log
-/osc_simlog
+osc_log
+osc_simlog
 /gpio_out.txt
+/config.txt
+/*.bmp
+/*.xml
 *~
 
 # generated files

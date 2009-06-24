@@ -78,10 +78,10 @@ static OSC_ERR init(const int argc, const char * argv[])
 	srand(OscSupCycGet());
 
 #if defined(OSC_HOST) || defined(OSC_SIM)
-	err = OscFrdCreateConstantReader(&data.hFileNameReader, TEST_IMAGE_FN);
+	err = OscFrdCreateConstantReader(&data.hFileNameReader, IMAGE_DIRECTORY "left12.bmp");
 	if (err != SUCCESS)
 	{
-		OscLog(ERROR, "%s: Unable to create constant file name reader for %s! (%d)\n", __func__, TEST_IMAGE_FN, err);
+		OscLog(ERROR, "%s: Unable to create constant file name reader for %s! (%d)\n", __func__,  IMAGE_DIRECTORY "left12.bmp", err);
 		goto frd_err;
 	}
 	err = OscCamSetFileNameReader(data.hFileNameReader);
@@ -99,7 +99,7 @@ static OSC_ERR init(const int argc, const char * argv[])
 		OscLog(ERROR, "%s: Unable to preset camera registers! (%d)\n", __func__, err);
 		goto fb_err;
 	}
-
+#if 0
 	/* Set up two frame buffers with enough space for the maximum
 	 * camera resolution in cached memory. */
 	err = OscCamSetFrameBuffer(0, OSC_CAM_MAX_IMAGE_WIDTH*OSC_CAM_MAX_IMAGE_HEIGHT, data.u8FrameBuffers[0], TRUE);
@@ -122,7 +122,7 @@ static OSC_ERR init(const int argc, const char * argv[])
 		OscLog(ERROR, "%s: Unable to set up multi buffer!\n", __func__);
 		goto mb_err;
 	}
-
+#endif
 	/* Register an IPC channel to the CGI for the user interface. */
 	err = OscIpcRegisterChannel(&data.ipc.ipcChan, USER_INTERFACE_SOCKET_PATH, F_IPC_SERVER | F_IPC_NONBLOCKING);
 	if (err != SUCCESS)
@@ -145,9 +145,7 @@ per_err:
 ipc_err:
 mb_err:
 fb_err:
-#if defined(OSC_HOST) || defined(OSC_SIM)
 frd_err:
-#endif
 	OscUnloadDependencies(data.hFramework, deps, sizeof(deps)/sizeof(struct OSC_DEPENDENCY));
 dep_err:
 	OscDestroy(&data.hFramework);
