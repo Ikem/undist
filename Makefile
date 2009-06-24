@@ -40,7 +40,7 @@ SOURCES_cgi/cgi := $(wildcard cgi/*.c cgi/*.cpp)
 
 APPS := app-template cgi/template.cgi
 
-ifeq 'CONFIG_ENABLE_DEBUG' 'y'
+ifeq '$(CONFIG_ENABLE_DEBUG)' 'y'
 CFLAGS_host := $(CFLAGS) -DOSC_HOST -O2
 CFLAGS_target := $(CFLAGS) -DOSC_TARGET -O2
 else
@@ -48,9 +48,8 @@ CFLAGS_host := $(CFLAGS) -DOSC_HOST -g
 CFLAGS_target := $(CFLAGS) -DOSC_TARGET -ggdb3
 endif
 
-ifeq 'CONFIG_ENABLE_SIMULATION' 'y'
-CFLAGS_host += -DOSC_TARGET
-CFLAGS_target += -DOSC_TARGET
+ifeq '$(CONFIG_ENABLE_SIMULATION)' 'y'
+CFLAGS_target += -DOSC_SIM
 endif
 
 CC_c_host = gcc -std=gnu99 $(CFLAGS_host)
@@ -66,13 +65,12 @@ APPS := $(patsubst SOURCES_%, %, $(filter SOURCES_%, $(.VARIABLES)))
 
 ARS_host := oscar/library/libosc_host
 ARS_target := oscar/library/libosc_target
-ifeq 'CONFIG_ENABLE_DEBUG' 'y'
+ifeq '$(CONFIG_ENABLE_SIMULATION)' 'y'
+ARS_target := $(ARS_target)_sim
+endif
+ifeq '$(CONFIG_ENABLE_DEBUG)' 'y'
 ARS_host := $(ARS_host)_dbg
 ARS_target := $(ARS_target)_dbg
-endif
-ifeq 'CONFIG_ENABLE_SIMULATION' 'y'
-ARS_host := $(ARS_host)_sim
-ARS_target := $(ARS_target)_sim
 endif
 ARS_host := $(ARS_host).a
 ARS_target := $(ARS_target).a
