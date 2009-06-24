@@ -57,11 +57,13 @@ function createElement(tag, attrs, contents) {
 
 function buildControls() {
 	$("input([type=checkbox], [type=radio]):parent").each(function () {
-		var id = $(this).attr("name") + "+" + $(this).attr("value");
-		
-		$(this).attr("id", id)
-		$(this).after(createElement("label", { "for" : id }, $(this).contents()));
-		$(this).empty();
+		if($(this).attr("type") == "checkbox" || $(this).attr("type") == "radio") {
+			var id = $(this).attr("name") + "-" + $(this).attr("value");
+			
+			$(this).attr("id", id)
+			$(this).after(createElement("label", { "for" : id }, $(this).contents()));
+			$(this).empty();
+		}
 	})
 }
 
@@ -138,19 +140,29 @@ function parseValues(data) {
 	return obj;
 }
 
-function exchangeState(data, onLoad, onError) {
+function ajax(event, data, onLoad, onError) {
+	if (data === undefined)
+		data = { };
+	
+	if (onLoad === undefined)
+		onLoad = function () { };
+	
+	var post = event + "\n" + serializeValues(data);
+	
+	console.log("POST: " + post);
+	
 	$.ajax({
 		async: true,
 		cache: false,
 		contentType: "text/plain",
-		data: serializeValues(data),
+		data: post,
 		error: onError,
 		success: function (data) {
 			onLoad(parseValues(data));
 		},
 		timeout: 2000,
 		type: "POST",
-		url: "/cgi-bin/cgi"
+		url: appURL + "/cgi-bin/cgi"
 	});
 }
 
@@ -171,7 +183,7 @@ var offBanner = {
 			return;
 		
 		this.active = true;
-		$("#off").stop(true, true).fadeIn("fast");
+	//	$("#off").stop(true, true).fadeIn("fast");
 		
 		$("#off .wheel").everyTime("100ms", function () {
 			wheelPos = (wheelPos + 1) % 12;
@@ -183,9 +195,9 @@ var offBanner = {
 			return;
 		
 		this.active = false;
-		$("#off").stop(true, true).fadeOut("fast", function () {
+	/*	$("#off").stop(true, true).fadeOut("fast", function () {
 			$(".wheel", this).stopTime();
-		});
+		});*/
 	}
 }
 

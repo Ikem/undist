@@ -138,8 +138,10 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 		captureImage(image.original);
 		calib = loadModel();
 		persp = loadConfig();
+		writeImage(showFile, image.original);
 		if(persp.undistort)
 		{
+			printf("Line %d\n", __LINE__);
 			undist = cmCalibrateUndistort(calib, image.original);
 		}
 
@@ -149,13 +151,14 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 		writeImage(showFile, image.original);
 		if(persp.undistort)
 		{
+			printf("Line %d\n", __LINE__);
 			image.lvundist = cmUndistort(undist, image.original);
 			if(persp.perspTransform)
 			{
 				image.lvundist = cmPerspectiveTransform(persp, image.lvundist);
 			}
+			writeImage(undistortFile, image.lvundist);
 		}
-		writeImage(undistortFile, image.lvundist);
 		return 0;
 	}
 	return msg;
@@ -287,8 +290,7 @@ int readLine(MainState*  mainState) {
 			OscLog(INFO, "UndistortGridBtn\n");
 			ThrowEvent(mainState, UNDISTORT_GRID_EVT);
 		}
-	}else{
-		OscLog(INFO, "Image ready\n");
+	}else{;
 		ThrowEvent(mainState, IMG_SEQ_EVT);
 	}
 }
@@ -396,51 +398,25 @@ OSC_ERR StateControl( void)
 		original.bmp, calibrated.bmp, undistorted.bmp, lvundist.bmp
 	*/
 
+	// Input parameters
+	calib.n_boards = 1; 			// Number of chessboard views
+	calib.board_w = 6;				// Number of points horizontal
+	calib.board_h = 9;				// Number of points vertical
+
+	persp.Z = 45;
+	persp.perspTransform = FALSE;//FALSE;
+
+	button.readFile = false;
+
 	while (TRUE)
 	{
-
-
-	// Input parameters
-		calib.n_boards = 1; 			// Number of chessboard views
-		calib.board_w = 6;				// Number of points horizontal
-		calib.board_h = 9;				// Number of points vertical
-
-	    persp.Z = 45;
-		persp.perspTransform = FALSE;//FALSE;
-
-		button.readFile = TRUE;
 
 		HandleIpcRequests(&mainState);
 		ThrowEvent(&mainState, IMG_SEQ_EVT);
 
-	//	readLine(&mainState);
+		//readLine(&mainState);
 
 
-
-
-
-
-	// ----------------------------------------------------------------------------------------------------
-
-/*
-		if(ShowRawImageBtn){
-			OscLog(INFO, "ShowRawImageBtn\n");
-			ThrowEvent(&mainState, SHOW_RAW_IMAGE_EVT);
-			ShowRawImageBtn = 0;
-		}
-
-		if(GoToCalibrateBtn){
-			OscLog(INFO, "GoToCalibrateBtn\n");
-			ThrowEvent(&mainState, GO_TO_CALIBRATION_EVT);
-			GoToCalibrateBtn = 0;
-		}
-
-		if(GoToLiveViewBtn){
-			OscLog(INFO, "GoToLiveViewBtn\n");
-			ThrowEvent(&mainState, GO_TO_LIVE_VIEW_EVT);//GET_NEW_GRID_EVT);
-			GoToLiveViewBtn = 0;
-		}
-*/
 		/* Advance the simulation step counter. */
 		//OscSimStep();
 	} /* end while ever */

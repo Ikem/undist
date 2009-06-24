@@ -12,11 +12,49 @@
 		<script src="js/jquery.form-2.28.js"></script>
 		<script src="js/functions.js"></script>
 		<script type="text/javascript"><![CDATA[
+			var appURL = "http://192.168.1.10/";
+			var counter = 0;
+			
+			function updateImage(id, name) {
+				if (name === undefined)
+					name = id;
+				
+				counter += 1;
+				$("#" + id).attr("src", appURL + name + ".bmp?" + counter);
+			}
+			
+			function updateAppMode(mode) {
+				if (mode == "LiveViewMode") {
+					$("#calibration-mode").hide();
+					$("#live-view-mode").show();
+					updateImage("lvoriginal", "original");
+					updateImage("lvundist");
+				} else if (mode == "CalibrationMode") {
+					$("#live-view-mode").hide();
+					$("#calibration-mode").show();
+					updateImage("original");
+					updateImage("calibrated");
+					updateImage("undistorted");
+				}
+			}
+			
+			function updateAppState() {
+				ajax("GetAppState", {}, function (data) {
+					updateAppMode(data.appMode);
+				}, function (err) {
+					console.log(err);
+				});
+			}
+			
 			$(function () {
 				// Decompile input tags with content to an input and a separate label tag.
 				buildControls();
 				// Call the function that updates in- and output and eventually calls itself.
-				updateCycle();
+			//	updateCycle();
+				$(document).everyTime("2s", updateAppState);
+				$("#activate-undistort-true").click(function () {
+					ajax("SetUndistortActive", { active: $(this).fieldValue() });
+				})
 			})
 		]]></script>
 	</head>
@@ -40,28 +78,56 @@
 			</div>
 		</div>
 		<div id="live-view-mode" class="big-box">
-			<h3>Live view mode</h3>  
+			<p style="text-align:right; margin:0px"><a href="javascript: ajax('GoToCalibrateBtn')">Go to calibration mode</a></p>
+			<h2>Live view mode</h2>  
 			<div style="display:table-row; margin:0px">
 				<div style="display:table-cell; width:500px; vertical-align:top;">
-					<input type="checkbox" name="activate-undistort">Activate image undistortion</input>
+					<input type="checkbox" name="activate-undistort" value="true">Activate image undistortion</input>
 				</div>
 				<div style="display:table-cell">
-					<img src="left12.bmp" width="376" style="float:right; margin-bottom: 8px" />
-					<img src="left12.bmp" width="376" style="float:right;" />
+					<img id="lvoriginal" src="left12.bmp" width="376" style="float:right;" />
+					<img id="lvundist" src="left12.bmp" width="376" style="float:right;" />
 				</div>
 			</div>
 		</div>
-		<div id="calibration-mode" class="big-box">
-			<h3>Calibration mode</h3>
-			<div style="display:table-row; margin:0px">
+		<div id="calibration-mode" class="big-box" style="display:none">
+			<p style="text-align:right; margin:0px"><a href="javascript: ajax('GoToLiveViewBtn')">Go to live view mode</a></p>
+			<h2>Calibrate</h2>
+			<div style="display:table-row; padding:5px">
 				<div style="display:table-cell; width:500px; vertical-align:top;">
-					mdslmflkdsmf
+					<h3>Capture grid image</h3>
+					<p><input name="image-source" type="radio" value="sensor">Sensor</input></p>
+					<p><input name="image-source" type="radio" value="file">File</input></p>
+					<p><button name="GetNewGridBtn" type="button">New grid image</button></p>
 				</div>
 				<div style="display:table-cell">
-					<img src="left12.bmp" width="376" style="float:right;" />
+					<img id="original" src="left12.bmp" width="376" style="float:right;" />
 				</div>
 			</div>
-			<span style="clear:both;">sdf</span>
+			<div style="display:table-row; padding:5px">
+				<div style="display:table-cell; width:500px; vertical-align:top;">
+					<h3>Camera calibration</h3>
+					<p>Numer of corners</p>
+					<p>X: <input name="boardW" type="text" value="4" /></p>
+					<p>Y: <input name="boardH" type="text" value="4" /></p>
+					<p><button name="CalibrateCameraBtn" type="button">Calibrate</button></p>
+				</div>
+				<div style="display:table-cell">
+					<img id="calibrated" src="left12.bmp" width="376" style="float:right;" />
+				</div>
+			</div>
+			<div style="display:table-row; padding:5px">
+				<div style="display:table-cell; width:500px; vertical-align:top;">
+					<h3>Undistortion</h3>
+					<p><input type="checkbox" name="perspTransform" value="true">Perspective Transformation</input></p>
+					<p>Zoom: <input name="Z" type="text" value="45" /></p>
+					<p><button name="UndistortGridBtn" type="button">Undistort</button></p>
+				</div>
+				<div style="display:table-cell">
+					<img id="undistorted" src="left12.bmp" width="376" style="float:right;" />
+				</div>
+			</div>
+			<p style="text-align:right"><button name="SaveBtn" type="button">Save</button></p>
 		</div>
 	</body>
 </html>
