@@ -36,7 +36,7 @@
 #define CAMERA_TIMEOUT 1
 
 #if defined(OSC_HOST)
-#define IMAGE_DIRECTORY "/home/mike/undist/"
+#define IMAGE_DIRECTORY "/var/www/"
 #endif
 
 #if defined(OSC_TARGET)

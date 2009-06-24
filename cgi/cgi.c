@@ -242,17 +242,17 @@ static OSC_ERR SetOptions()
  * @brief Take all the gathered info and formulate a valid AJAX response
  * that can be parsed by the Javascript in the browser.
  *//*********************************************************************/
-static void FormCGIResponse()
+/*static void FormCGIResponse()
 {
 	struct APPLICATION_STATE  *pAppState = &cgi.appState;
 
-	/* Header */
+	// Header
 	printf("Content-type: text/plain\n\n" );
 
 	printf("imgTS: %u\n", (unsigned int)pAppState->imageTimeStamp);
 
 	fflush(stdout);
-}
+}*/
 
 OSC_ERR getHeader(char ** header) {
 	static char buffer[1024];
@@ -292,12 +292,12 @@ OSC_ERR handleRequest() {
 	OSC_ERR err = SUCCESS;
 	char * header;
 
-	printf("Line %d\n", __LINE__);
+	printf("Content-type: text/plain\n\n");
+//	printf("Status: 200 OK\n\n");
 
 	err = getHeader(&header);
 	if (err != SUCCESS)
 		return err;
-	printf("Line %d\n", __LINE__);
 
 	if (strcmp(header, "GoToLiveViewBtn") == 0) {
 		err = OscIpcSetParam(cgi.ipcChan, &dummy, GO_TO_LIVE_VIEW_MODE, sizeof dummy);
@@ -313,13 +313,25 @@ OSC_ERR handleRequest() {
 			OscLog(DEBUG, "CGI: Error setting option! (%d)\n", err);
 			return err;
 		}
+	} else if (strcmp(header, "GetAppState") == 0) {
+		struct APPLICATION_STATE appState;
+		err = OscIpcGetParam(cgi.ipcChan, &appState, GET_APP_STATE, sizeof appState);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error getting app state! (%d)\n", err);
+			return err;
+		}
+		if (appState.appMode == appMode_LiveViewMode) {
+			printf("appMode: LiveViewMode\n");
+		} else if (appState.appMode == appMode_CalibrationMode) {
+			printf("appMode: CalibrationMode\n");
+		} else {
+			printf("appMode: %d\n", appState.appMode);
+		}
 	} else {
-		printf("Line %d\n", __LINE__);
 		return -1;
 	}
 
-	printf("Line %d\n", __LINE__);
-	printf("Content-type: text/plain\n\n" );
 
 	return SUCCESS;
 }
@@ -347,7 +359,7 @@ int main()
 	{
 		/* Socket does not exist => Algorithm is off. */
 		/* Form a short reply with that info and shut down. */
-		cgi.appState.enAppMode = APP_OFF;
+	//	cgi.appState.enAppMode = APP_OFF;
 		return 1;
 	}
 
@@ -384,10 +396,8 @@ int main()
 		OscDestroy(cgi.hFramework);
 		return 1;
 	}
-	printf("Line %d\n", __LINE__);
 
 	err = handleRequest();
-	printf("Line %d\n", __LINE__);
 
 #if 0
 	err = CGIParseArguments();

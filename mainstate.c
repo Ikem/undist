@@ -31,16 +31,13 @@
 
 // Global image structure used with StateMachine
 struct {
-	IplImage *original, *calibrated, *undistort, *perspTrans;
+	IplImage *original, *calibrated, *undistort, *lvundist;
 } image;
 
 
 const Msg mainStateMsg[] = {
-	{ FRAMESEQ_EVT },
-	{ FRAMEPAR_EVT },
 	{ IPC_GET_APP_STATE_EVT },
-	{ SHOW_RAW_IMAGE_EVT },
-	{ SHOW_UNDIST_IMAGE_EVT },
+	{ SHOW_CAMERA_IMAGE_EVT },
 	{ GO_TO_LIVE_VIEW_EVT },
 	{ GO_TO_CALIBRATION_EVT },
 	{ GET_NEW_GRID_EVT },
@@ -62,52 +59,26 @@ void ThrowEvent(struct MainState *pHsm, unsigned int evt)
 	HsmOnEvent((Hsm*)pHsm, pMsg);
 }
 
-/*********************************************************************//*!
- * @brief Checks for IPC events, schedules their handling and
- * acknowledges any executed ones.
- *
- * @param pMainState Initalized HSM main state variable.
- * @return 0 on success or an appropriate error code.
- *//*********************************************************************/
-/*
-static OSC_ERR HandleIpcRequests(MainState *pMainState)
-{
-	OSC_ERR err;
-	uint32 paramId;
 
-	err = CheckIpcRequests(&paramId);
-	if (err == SUCCESS)
-		{
-
-		}
-	return err;
-}
-*/
 
 Msg const *MainState_top(MainState *me, Msg *msg)
 {
 	bool ModelPresent = 0;
 	switch (msg->evt)
 	{
-	/*
-	case ENTRY_EVT:
-		return 0;
-	*/
 	case START_EVT:
 		OscLog(INFO, "Start Event\n");
-		if(ModelPresent)
+		persp = loadConfig();
+
+		if(persp.undistort)
 		{
 			OscLog(INFO, "ModelPresent\n");
-			STATE_START(me, &me->Undistort);
+			STATE_START(me, &me->ShowCameraImage);
 		}else
 		{
 			OscLog(INFO, "ModelNotPresent\n");
-			STATE_START(me, &me->Raw);
+			STATE_START(me, &me->CalibrationMode);
 		}
-		return 0;
-	case FRAMESEQ_EVT:
-		return 0;
-	case FRAMEPAR_EVT:
 		return 0;
 	case IPC_GET_APP_STATE_EVT:
 		return 0;
@@ -121,18 +92,15 @@ Msg const *MainState_LiveViewMode(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State LiveViewMode!\n");
+		data.ipc.state.appMode = appMode_LiveViewMode;
 		return 0;
 	case GO_TO_CALIBRATION_EVT:
 		OscLog(INFO, "GO_TO_CALIBRATION_EVT\n");
 		STATE_TRAN(me, &me->CalibrationMode);
 		return 0;
-	case SHOW_RAW_IMAGE_EVT:
-		OscLog(INFO, "SHOW_RAW_IMAGE_EVT\n");
-		STATE_TRAN(me, &me->Raw);
-		return 0;
-	case SHOW_UNDIST_IMAGE_EVT:
-		OscLog(INFO, "SHOW_UNDIST_IMAGE_EVT\n");
-		STATE_TRAN(me, &me->Undistort);
+	case SHOW_CAMERA_IMAGE_EVT:
+		OscLog(INFO, "SHOW_CAMERA_IMAGE_EVT\n");
+		STATE_TRAN(me, &me->ShowCameraImage);
 		return 0;
 	}
 	return msg;
@@ -144,6 +112,7 @@ Msg const *MainState_CalibrationMode(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State CalibrationMode!\n");
+		data.ipc.state.appMode = appMode_CalibrationMode;
 		return 0;
 	case GO_TO_LIVE_VIEW_EVT:
 		OscLog(INFO, "GO_TO_LIVE_VIEW_EVT\n");
@@ -157,61 +126,45 @@ Msg const *MainState_CalibrationMode(MainState *me, Msg *msg)
 	return msg;
 }
 
-Msg const *MainState_Raw(MainState *me, Msg *msg)
+Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 {
+	const char* undistortFile = IMAGE_DIRECTORY "lvundist.bmp";
+	const char* showFile = IMAGE_DIRECTORY "original.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
-		OscLog(INFO, "Enter in State Raw!\n");
+		OscLog(INFO, "Enter in State ShowCameraImage!\n");
+		captureImage(image.original);
+		calib = loadModel();
+		persp = loadConfig();
+		undist = cmCalibrateUndistort(calib, image.original);
+		return 0;
+	case IMG_SEQ_EVT:
+		captureImage(image.original);
+		writeImage(showFile, image.original);
+		if(persp.undistort)
+		{
+			image.lvundist = cmUndistort(undist, image.original);
+			if(persp.perspTransform)
+			{
+				image.lvundist = cmPerspectiveTransform(persp, image.lvundist);
+			}
+		}
+		writeImage(undistortFile, image.lvundist);
 		return 0;
 	}
 	return msg;
 }
 
-Msg const *MainState_Undistort(MainState *me, Msg *msg)
-{
-	switch (msg->evt)
-	{
-	case ENTRY_EVT:
-		OscLog(INFO, "Enter in State Undistort!\n");
-		usleep(2000000);
-		OscLog(INFO, "Waited 5s !\n");
-		return 0;
-	}
-	return msg;
-}
 
 Msg const *MainState_WaitForGrid(MainState *me, Msg *msg)
 {
-	bool read_file = 1;
-	const char* srcFile = IMAGE_DIRECTORY "left12.bmp";
+	const char* showFile = IMAGE_DIRECTORY "original.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State WaitForGrid!\n");
-		if(read_file){
-			OscLog(INFO, "Read bmp\n");
-			image.original = readImage(srcFile);
-		}else{
-			OscLog(INFO, "Read image from sensor\n");
-		}
-		return 0;
-	case IMG_SEQ_EVT:
-		OscLog(INFO, "IMG_SEQ_EVT\n");
-		STATE_TRAN(me, &me->ShowGrid);
-		return 0;
-	}
-	return msg;
-}
-
-Msg const *MainState_ShowGrid(MainState *me, Msg *msg)
-{
-	const char* showFile = IMAGE_DIRECTORY "original.bmp";
-
-	switch (msg->evt)
-	{
-	case ENTRY_EVT:
-		OscLog(INFO, "Enter in State ShowGrid!\n");
+		captureImage(image.original);
 		writeImage(showFile, image.original);
 		return 0;
 	case CALIBRATE_CAMERA_EVT:
@@ -221,6 +174,7 @@ Msg const *MainState_ShowGrid(MainState *me, Msg *msg)
 	}
 	return msg;
 }
+
 
 Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 {
@@ -232,6 +186,7 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 		OscLog(INFO, "Enter in State CalibrateCamera!\n");
 		calib = cmCalibrateCamera(calib.n_boards, calib.board_w, calib.board_h, image.original);
 		image.calibrated = cmDrawChessboardCorners(image.original, calib);
+		undist = cmCalibrateUndistort(calib, image.original);
 		if(calib.corners_found){
 				// Save calibrated image
 				writeImage(calibFile, image.calibrated);
@@ -250,21 +205,22 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 {
 	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
-	//const char* perspTransFile = IMAGE_DIRECTORY "birdseye.bmp";
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State UndistortGridAndShow!\n");
-		image.undistort = cmUndistort(calib, image.original);
+		image.undistort = cmUndistort(undist, image.original);
 		// Save undistorted image
 		writeImage(undistFile, image.undistort);
 		persp = cmCalculatePerspectiveTransform(calib, persp.Z, persp.perspTransform);
 		if(persp.perspTransform)
 		{
-			image.perspTrans = cmPerspectiveTransform(persp, image.undistort);
+			image.undistort = cmPerspectiveTransform(persp, image.undistort);
 			// Save birds_eye image
-			writeImage(undistFile, image.perspTrans);
+			writeImage(undistFile, image.undistort);
 		}
+		saveConfig(persp);
+		saveModel(calib);
 		return 0;
 	}
 	return msg;
@@ -279,10 +235,8 @@ void MainStateConstruct(MainState *me)
 
 	StateCtor(&me->LiveViewMode, "Live-view Mode", &((Hsm *)me)->top, (EvtHndlr)MainState_LiveViewMode);
 	StateCtor(&me->CalibrationMode, "Calibration Mode", &((Hsm *)me)->top, (EvtHndlr)MainState_CalibrationMode);
-	StateCtor(&me->Raw, "Raw", &me->LiveViewMode, (EvtHndlr)MainState_Raw);
-	StateCtor(&me->Undistort, "Undistort", &me->LiveViewMode, (EvtHndlr)MainState_Undistort);
+	StateCtor(&me->ShowCameraImage, "ShowCameraImage", &me->LiveViewMode, (EvtHndlr)MainState_ShowCameraImage);
 	StateCtor(&me->WaitForGrid, "Wait for Grid", &me->CalibrationMode, (EvtHndlr)MainState_WaitForGrid);
-	StateCtor(&me->ShowGrid, "Show Grid", &me->CalibrationMode, (EvtHndlr)MainState_ShowGrid);
 	StateCtor(&me->CalibrateCamera, "Calibrate Camera", &me->CalibrationMode, (EvtHndlr)MainState_CalibrateCamera);
 	StateCtor(&me->UndistortGridAndShow, "Undistort Grid and Show", &me->CalibrationMode, (EvtHndlr)MainState_UndistortGridAndShow);
 
@@ -304,13 +258,9 @@ int readLine(MainState*  mainState) {
 	if (n > 0) {
 		//printf("%d: %s %d %d %d %d %d\n", n, command, args[0], args[1], args[2], args[3], args[4]);
 
-		if(strcmp(command, "show-raw") == 0){
+		if(strcmp(command, "show-camera") == 0){
 			OscLog(INFO, "ShowRawImageBtn\n");
-			ThrowEvent(mainState, SHOW_RAW_IMAGE_EVT);
-		}
-		if(strcmp(command, "show-undist") == 0){
-			OscLog(INFO, "ShowUndistImageBtn\n");
-			ThrowEvent(mainState, SHOW_UNDIST_IMAGE_EVT);
+			ThrowEvent(mainState, SHOW_CAMERA_IMAGE_EVT);
 		}
 		if(strcmp(command, "live-view") == 0){
 			OscLog(INFO, "GoToLiveViewBtn\n");
@@ -324,10 +274,6 @@ int readLine(MainState*  mainState) {
 			OscLog(INFO, "GetNewGridBtn\n");
 			ThrowEvent(mainState, GET_NEW_GRID_EVT);
 		}
-		if(strcmp(command, "image-ready") == 0){
-			OscLog(INFO, "ImageReady\n");
-			ThrowEvent(mainState, IMG_SEQ_EVT);
-		}
 		if(strcmp(command, "calibrate") == 0){
 			OscLog(INFO, "CalibrateCameraBtn\n");
 			ThrowEvent(mainState, CALIBRATE_CAMERA_EVT);
@@ -336,12 +282,94 @@ int readLine(MainState*  mainState) {
 			OscLog(INFO, "UndistortGridBtn\n");
 			ThrowEvent(mainState, UNDISTORT_GRID_EVT);
 		}
+	}else{
+		OscLog(INFO, "Image ready\n");
+		ThrowEvent(mainState, IMG_SEQ_EVT);
 	}
+}
+
+/*********************************************************************//*!
+ * @brief Checks for IPC events, schedules their handling and
+ * acknowledges any executed ones.
+ *
+ * @param pMainState Initalized HSM main state variable.
+ * @return 0 on success or an appropriate error code.
+ *//*********************************************************************/
+static OSC_ERR HandleIpcRequests(MainState *pMainState)
+{
+	OSC_ERR err;
+	uint32 paramId;
+
+	err = CheckIpcRequests(&paramId);
+	if (err == SUCCESS)
+	{
+		/* We have a request. See to it that it is handled
+		 * depending on the state we're in. */
+		switch(paramId)
+		{
+#if 0
+		case GET_APP_STATE:
+			/* Request for the current state of the application. */
+			ThrowEvent(pMainState, IPC_GET_APP_STATE_EVT);
+			break;
+		case GET_COLOR_IMG:
+			/* Request for the live image. */
+			ThrowEvent(pMainState, IPC_GET_COLOR_IMG_EVT);
+			break;
+		case GET_RAW_IMG:
+			/* Request for the live image. */
+			ThrowEvent(pMainState, IPC_GET_RAW_IMG_EVT);
+			break;
+		case SET_CAPTURE_MODE:
+			/* Set the debayering option. */
+			ThrowEvent(pMainState, IPC_SET_CAPTURE_MODE_EVT);
+			break;
+#endif
+		case GET_APP_STATE:
+			memcpy(data.ipc.req.pAddr, (void *) &data.ipc.state, sizeof(data.ipc.state));
+		//	*((void **) data.ipc.req.pAddr) = (void *) &data.ipc.state;
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+		case GO_TO_LIVE_VIEW_MODE:
+			ThrowEvent(pMainState, GO_TO_LIVE_VIEW_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case GO_TO_CALIBRATION_MODE:
+			ThrowEvent(pMainState, GO_TO_CALIBRATION_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		default:
+			OscLog(ERROR, "%s: Unkown IPC parameter ID (%d)!\n", __func__, paramId);
+			data.ipc.enReqState = REQ_STATE_NACK_PENDING;
+			break;
+		}
+	}
+	else if (err == -ENO_MSG_AVAIL)
+	{
+		/* No new message available => do nothing. */
+	}
+	else
+	{
+		/* Error.*/
+		OscLog(ERROR, "%s: IPC request error! (%d)\n", __func__, err);
+		return err;
+	}
+
+	/* Try to acknowledge the new or any old unacknowledged
+	 * requests. It may take several tries to succeed.*/
+	err = AckIpcRequests();
+	if (err != SUCCESS)
+	{
+		OscLog(ERROR, "%s: IPC acknowledge error! (%d)\n", __func__, err);
+	}
+	return err;
 }
 
 OSC_ERR StateControl( void)
 {
 	//OscHsmCreate( data.hFramework);
+
+	image.lvundist = cvCreateImage(cvSize(OSC_CAM_MAX_IMAGE_WIDTH, OSC_CAM_MAX_IMAGE_HEIGHT), IPL_DEPTH_8U, 1);	// Initialize image 752,480
+	image.original = cvCreateImage(cvSize(OSC_CAM_MAX_IMAGE_WIDTH, OSC_CAM_MAX_IMAGE_HEIGHT), IPL_DEPTH_8U, 1);	// Initialize image 752,480
 
 	/* Setup main state machine */
 	MainState mainState;
@@ -350,18 +378,15 @@ OSC_ERR StateControl( void)
 	HsmOnStart((Hsm *)&mainState);
 	//OscSimInitialize();
 
-	bool ShowRawImageBtn = 1;
-	bool ShowUndistImageBtn = 0, GoToLiveViewBtn = 1, GoToCalibrateBtn = 1, GetNewGridBtn = 0, ImageReady = 0,
-		 CalibrateCameraBtn = 0, UndistortGridBtn = 0;
-
 
 	/*----------- infinite main loop */
 	/*	Enters in state Raw and then goes to state CalibrationMode and follows all states to calibrate and
 		undistort a given bmp.
 
 		Output images:
-		original.bmp, calibrated.bmp, undistort.bmp, birdseye.bmp
+		original.bmp, calibrated.bmp, undistorted.bmp, lvundist.bmp
 	*/
+
 	while (TRUE)
 	{
 
@@ -374,7 +399,12 @@ OSC_ERR StateControl( void)
 	    persp.Z = 45;
 		persp.perspTransform = FALSE;//FALSE;
 
-		readLine(&mainState);
+		button.readFile = TRUE;
+
+		HandleIpcRequests(&mainState);
+		ThrowEvent(&mainState, IMG_SEQ_EVT);
+
+	//	readLine(&mainState);
 
 
 

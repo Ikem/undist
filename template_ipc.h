@@ -65,11 +65,10 @@ enum EnAppMode
 struct APPLICATION_STATE
 {
 	/*! @brief Whether a new image is ready to display by the web interface. */
-	bool bNewImageReady;
-	/*! @brief The time stamp when the last live image was taken. */
-	uint32 imageTimeStamp;
-	/*! @brief The mode the application is running in. Depending on the mode different information may have to be displayed on the web interface.*/
-	enum EnAppMode enAppMode;
+	enum {
+		appMode_LiveViewMode,
+		appMode_CalibrationMode
+	} appMode;
 };
 
 #endif /*TEMPLATE_IPC_H_*/

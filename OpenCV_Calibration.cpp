@@ -40,13 +40,6 @@
        {};
 #endif /* BENCHMARK */
 
-#if defined(OSC_HOST)
-#define IMAGE_DIRECTORY "/home/mike/undist/"
-#endif
-
-#if defined(OSC_TARGET)
-#define IMAGE_DIRECTORY "/home/httpd/"
-#endif
 
 
 using namespace std;
@@ -378,8 +371,8 @@ void saveModel (struct CV_CALIBRATION calib)
 	if(calib.corners_found)
 	{
 		// SAVE THE INTRINSICS AND DISTORTIONS
-		cvSave(IMAGE_DIRECTORY "Intrinsics.xml",calib.intrinsic_matrix);
-		cvSave(IMAGE_DIRECTORY "Distortion.xml",calib.distortion_coeffs);
+		cvSave("Intrinsics.xml",calib.intrinsic_matrix);
+		cvSave("Distortion.xml",calib.distortion_coeffs);
 	//	cvSave(IMAGE_DIRECTORY "mapx.xml",undist.mapx);
 	//	cvSave(IMAGE_DIRECTORY "mapy.xml",undist.mapy);
 	}
@@ -396,7 +389,7 @@ void saveConfig (struct CV_PERSPECTIVE persp)
 	// variable declaration
 	struct CFG_KEY key;
 	CFG_FILE_CONTENT_HANDLE hCfgHandle;
-	const char* fileName = IMAGE_DIRECTORY "config.txt";
+	const char* fileName = "config.txt";
 
 	// register file and read it to memory
 	OscCfgRegisterFile(&hCfgHandle, fileName, 256);
@@ -416,7 +409,7 @@ void saveConfig (struct CV_PERSPECTIVE persp)
 	if(persp.perspTransform)
 	{
 		// SAVE THE HOMOGRAPHIE MATRIX
-		cvSave(IMAGE_DIRECTORY "H.xml", persp.H); // We can reuse H for the same camera mounting
+		cvSave("H.xml", persp.H); // We can reuse H for the same camera mounting
 	}
 	else
 	{
@@ -428,8 +421,8 @@ struct CV_CALIBRATION loadModel ()
 {
 	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
 	struct CV_CALIBRATION calib;
-	calib.intrinsic_matrix = (CvMat*)cvLoad(IMAGE_DIRECTORY "Intrinsics.xml");
-	calib.distortion_coeffs = (CvMat*)cvLoad(IMAGE_DIRECTORY "Distortion.xml");
+	calib.intrinsic_matrix = (CvMat*)cvLoad("Intrinsics.xml");
+	calib.distortion_coeffs = (CvMat*)cvLoad("Distortion.xml");
 	return calib;
 }
 
@@ -440,7 +433,7 @@ struct CV_PERSPECTIVE loadConfig ()
 	// variable declaration
 	struct CFG_KEY key;
 	CFG_FILE_CONTENT_HANDLE hCfgHandle;
-	const char* fileName = IMAGE_DIRECTORY "config.txt";
+	const char* fileName = "config.txt";
 
 	// register file and read it to memory
 	OscCfgRegisterFile(&hCfgHandle, fileName, 256);
@@ -456,7 +449,7 @@ struct CV_PERSPECTIVE loadConfig ()
 	// -----------------------------------------------------
 
 	// EXAMPLE OF LOADING THESE MATRICES BACK IN:
-	persp.H = (CvMat*)cvLoad(IMAGE_DIRECTORY "H.xml");
+	persp.H = (CvMat*)cvLoad("H.xml");
 	return persp;
 }
 

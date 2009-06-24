@@ -96,7 +96,7 @@ run:
 install: cgi/cgi_host
 	cp -RL cgi/www/* /var/www
 	cp $< /var/www/cgi-bin/cgi
-	chmod -Rf a+rX /var/www/ || true
+	chmod -Rf a+rwX /var/www/ || true
 
 reconfigure:
 ifeq '$(CONFIG_PRIVATE_FRAMEWORK)' 'n'
