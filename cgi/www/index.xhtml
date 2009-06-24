@@ -21,7 +21,7 @@
 				
 				counter += 1;
 				$("#" + id).attr("src", appURL + name + ".bmp?" + counter);
-			}
+			};
 			
 			function updateAppMode(mode) {
 				if (mode == "LiveViewMode") {
@@ -36,26 +36,38 @@
 					updateImage("calibrated");
 					updateImage("undistorted");
 				}
-			}
-			
-			function updateAppState() {
-				ajax("GetAppState", {}, function (data) {
-					updateAppMode(data.appMode);
-				}, function (err) {
-					console.log(err);
-				});
-			}
+			};
 			
 			$(function () {
 				// Decompile input tags with content to an input and a separate label tag.
 				buildControls();
-				// Call the function that updates in- and output and eventually calls itself.
-			//	updateCycle();
-				$(document).everyTime("2s", updateAppState);
+				
 				$("#activate-undistort-true").click(function () {
 					ajax("SetUndistortActive", { active: $(this).fieldValue() });
+				});
+				$("#GetNewGridBtn").click(function () {
+					ajax("GetNewGridBtn", { imageSource: getInputValue("imageSource") });
+				});
+				$("#CalibrateCameraBtn").click(function () {
+					ajax("CalibrateCameraBtn", {
+						boardW: getInputValue("boardW"), boardH: getInputValue("boardH")
+					});
+				});
+				$("#UndistortGridBtn").click(function () {
+					ajax("UndistortGridBtn", {
+						perspTransform: getInputValue("perspTransform"),
+						Z: getInputValue("Z")
+					});
+				});
+				$("#SaveModelConfigBtn").click(function () {
+					ajax("SaveModelConfigBtn");
+				});
+				
+				ajaxQueue.defaultReq = ajaxQueue.buildRequest("GetAppState", function (data) {
+					updateAppMode(parseValues(data).appMode);
 				})
-			})
+				ajaxQueue.spool();
+			});
 		]]></script>
 	</head>
 	<body>
@@ -85,8 +97,8 @@
 					<input type="checkbox" name="activate-undistort" value="true">Activate image undistortion</input>
 				</div>
 				<div style="display:table-cell">
-					<img id="lvoriginal" src="left12.bmp" width="376" style="float:right;" />
-					<img id="lvundist" src="left12.bmp" width="376" style="float:right;" />
+					<img id="lvoriginal" src="left12.bmp" width="376" height="240" style="float:right;" />
+					<img id="lvundist" src="left12.bmp" width="376" height="240" style="float:right;" />
 				</div>
 			</div>
 		</div>
@@ -96,12 +108,12 @@
 			<div style="display:table-row; padding:5px">
 				<div style="display:table-cell; width:500px; vertical-align:top;">
 					<h3>Capture grid image</h3>
-					<p><input name="image-source" type="radio" value="sensor">Sensor</input></p>
-					<p><input name="image-source" type="radio" value="file">File</input></p>
-					<p><button name="GetNewGridBtn" type="button">New grid image</button></p>
+					<p><input name="imageSource" type="radio" value="sensor" checked="checked">Sensor</input></p>
+					<p><input name="imageSource" type="radio" value="file">File</input></p>
+					<p><button id="GetNewGridBtn" type="button">New grid image</button></p>
 				</div>
 				<div style="display:table-cell">
-					<img id="original" src="left12.bmp" width="376" style="float:right;" />
+					<img id="original" src="left12.bmp" width="376" height="240" style="float:right;" />
 				</div>
 			</div>
 			<div style="display:table-row; padding:5px">
@@ -110,10 +122,10 @@
 					<p>Numer of corners</p>
 					<p>X: <input name="boardW" type="text" value="4" /></p>
 					<p>Y: <input name="boardH" type="text" value="4" /></p>
-					<p><button name="CalibrateCameraBtn" type="button">Calibrate</button></p>
+					<p><button id="CalibrateCameraBtn" type="button">Calibrate</button></p>
 				</div>
 				<div style="display:table-cell">
-					<img id="calibrated" src="left12.bmp" width="376" style="float:right;" />
+					<img id="calibrated" src="left12.bmp" width="376" height="240" style="float:right;" />
 				</div>
 			</div>
 			<div style="display:table-row; padding:5px">
@@ -121,13 +133,13 @@
 					<h3>Undistortion</h3>
 					<p><input type="checkbox" name="perspTransform" value="true">Perspective Transformation</input></p>
 					<p>Zoom: <input name="Z" type="text" value="45" /></p>
-					<p><button name="UndistortGridBtn" type="button">Undistort</button></p>
+					<p><button id="UndistortGridBtn" type="button">Undistort</button></p>
 				</div>
 				<div style="display:table-cell">
-					<img id="undistorted" src="left12.bmp" width="376" style="float:right;" />
+					<img id="undistorted" src="left12.bmp" width="376" height="240" style="float:right;" />
 				</div>
 			</div>
-			<p style="text-align:right"><button name="SaveBtn" type="button">Save</button></p>
+			<p style="text-align:right"><button id="SaveModelConfigBtn" type="button">Save</button></p>
 		</div>
 	</body>
 </html>

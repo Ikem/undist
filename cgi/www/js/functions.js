@@ -57,13 +57,11 @@ function createElement(tag, attrs, contents) {
 
 function buildControls() {
 	$("input([type=checkbox], [type=radio]):parent").each(function () {
-		if($(this).attr("type") == "checkbox" || $(this).attr("type") == "radio") {
-			var id = $(this).attr("name") + "-" + $(this).attr("value");
-			
-			$(this).attr("id", id)
-			$(this).after(createElement("label", { "for" : id }, $(this).contents()));
-			$(this).empty();
-		}
+		var id = $(this).attr("name") + "-" + $(this).attr("value");
+		
+		$(this).attr("id", id)
+		$(this).after(createElement("label", { "for" : id }, $(this).contents()));
+		$(this).empty();
 	})
 }
 
@@ -149,21 +147,50 @@ function ajax(event, data, onLoad, onError) {
 	
 	var post = event + "\n" + serializeValues(data);
 	
-	console.log("POST: " + post);
+	ajaxQueue.ajax(post, function (data) {
+		onLoad(parseValues(data));
+	}, onError);
 	
-	$.ajax({
-		async: true,
-		cache: false,
-		contentType: "text/plain",
-		data: post,
-		error: onError,
-		success: function (data) {
-			onLoad(parseValues(data));
-		},
-		timeout: 2000,
-		type: "POST",
-		url: appURL + "/cgi-bin/cgi"
-	});
+	console.log("POST: " + post);
+}
+
+var ajaxQueue = {
+	queue: [],
+	ajax: function (data, onLoad, onError) {
+		ajaxQueue.queue.push(ajaxQueue.buildRequest(data, onLoad, onError));
+	},
+	buildRequest: function (data, onLoad, onError) {
+		return {
+			async: true,
+			cache: false,
+			contentType: "text/plain",
+			data: data,
+			success2: onLoad,
+			error2: onError,
+			timeout: 120000,
+			type: "POST",
+			url: appURL + "/cgi-bin/cgi"
+		};
+	},
+	spool: function () {
+		var next = ajaxQueue.queue.shift() || ajaxQueue.defaultReq;
+		var success2 = next.success2;
+		var error2 = next.error2;
+		
+		next.success = function (data) {
+			
+			ajaxQueue.spool();
+			if ($.isFunction(success2))
+				success2(data);
+		};
+		
+		next.error = function () {
+			ajaxQueue.spool();
+			error2();
+		};
+		
+		$(document).oneTime("200ms", function () { $.ajax(next); });
+	}
 }
 
 function asynLoadImage(url, onLoad, onError) {

@@ -88,10 +88,10 @@ all: $(BINARIES)
 host target: %: $(addsuffix _%, $(PRODUCTS))
 
 deploy: $(APP_NAME).app
-	tar c $< | ssh root@$(CONFIG_TARGET_IP) 'rm -rf $< && tar x -C /tmp' || true
+	tar c $< | ssh root@$(CONFIG_TARGET_IP) 'rm -rf $< && tar x -C /mnt/app' || true
 
 run:
-	ssh root@$(CONFIG_TARGET_IP) /tmp/$(APP_NAME).app/run.sh || true
+	ssh root@$(CONFIG_TARGET_IP) /mnt/app/$(APP_NAME).app/run.sh || true
 
 install: cgi/cgi_host
 	cp -RL cgi/www/* /var/www
