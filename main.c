@@ -28,6 +28,11 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <unistd.h>
 
 /*! @brief This stores all variables needed by the algorithm. */
 struct TEMPLATE data;
@@ -174,6 +179,15 @@ int main(const int argc, const char * argv[])
 {
 	OSC_ERR err = SUCCESS;
 
+/*	// set resource limits
+	struct rlimit rlim;
+
+	rlim.rlim_cur = 30 * 1024 * 1024;
+	rlim.rlim_max = 30 * 1024 * 1024;
+	setrlimit(RLIMIT_DATA, &rlim);
+
+	memset(malloc(25 * 1024 * 1024), 1, 25 * 1024 * 1024);
+*/
 	err = init(argc, argv);
 	if (err != SUCCESS)
 	{

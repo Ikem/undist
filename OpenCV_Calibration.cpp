@@ -236,7 +236,7 @@ OSC_ERR writeImage(const char * srcImage, IplImage * image)
 	return SUCCESS;
 
 fail:
-	cvReleaseImage(&image);
+//	cvReleaseImage(&image);
 	return err;
 }
 

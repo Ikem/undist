@@ -116,7 +116,8 @@ Msg const *MainState_CalibrationMode(MainState *me, Msg *msg)
 		return 0;
 	case GO_TO_LIVE_VIEW_EVT:
 		OscLog(INFO, "GO_TO_LIVE_VIEW_EVT\n");
-		STATE_TRAN(me, &me->LiveViewMode);
+		persp.undistort = false;
+		STATE_TRAN(me, &me->ShowCameraImage);
 		return 0;
 	case GET_NEW_GRID_EVT:
 		OscLog(INFO, "GET_NEW_GRID_EVT\n");
@@ -137,7 +138,11 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 		captureImage(image.original);
 		calib = loadModel();
 		persp = loadConfig();
-		undist = cmCalibrateUndistort(calib, image.original);
+		if(persp.undistort)
+		{
+			undist = cmCalibrateUndistort(calib, image.original);
+		}
+
 		return 0;
 	case IMG_SEQ_EVT:
 		captureImage(image.original);
@@ -325,16 +330,20 @@ static OSC_ERR HandleIpcRequests(MainState *pMainState)
 			ThrowEvent(pMainState, IPC_SET_CAPTURE_MODE_EVT);
 			break;
 #endif
-		case GET_APP_STATE:
-			memcpy(data.ipc.req.pAddr, (void *) &data.ipc.state, sizeof(data.ipc.state));
-		//	*((void **) data.ipc.req.pAddr) = (void *) &data.ipc.state;
-			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
 		case GO_TO_LIVE_VIEW_MODE:
 			ThrowEvent(pMainState, GO_TO_LIVE_VIEW_EVT);
 			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
 			break;
 		case GO_TO_CALIBRATION_MODE:
 			ThrowEvent(pMainState, GO_TO_CALIBRATION_EVT);
+			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
+			break;
+		case SET_UNDISTORT_ACTIVE:
+			persp.undistort = *(bool *) data.ipc.req.pAddr;
+			break;
+		case GET_APP_STATE:
+			memcpy(data.ipc.req.pAddr, (void *) &data.ipc.state, sizeof(data.ipc.state));
+		//	*((void **) data.ipc.req.pAddr) = (void *) &data.ipc.state;
 			data.ipc.enReqState = REQ_STATE_ACK_PENDING;
 			break;
 		default:

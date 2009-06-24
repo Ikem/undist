@@ -220,7 +220,7 @@ static OSC_ERR QueryApp()
  *
  * @return SUCCESS or an appropriate error code otherwise
  *//*********************************************************************/
-static OSC_ERR SetOptions()
+/*static OSC_ERR SetOptions()
 {
 	OSC_ERR err;
 	struct ARGUMENT_DATA *pArgs = &cgi.args;
@@ -236,7 +236,7 @@ static OSC_ERR SetOptions()
 	}
 
 	return SUCCESS;
-}
+}*/
 
 /*********************************************************************//*!
  * @brief Take all the gathered info and formulate a valid AJAX response
@@ -308,6 +308,21 @@ OSC_ERR handleRequest() {
 		}
 	} else if (strcmp(header, "GoToCalibrateBtn") == 0) {
 		err = OscIpcSetParam(cgi.ipcChan, &dummy, GO_TO_CALIBRATION_MODE, sizeof dummy);
+		if (err != SUCCESS)
+		{
+			OscLog(DEBUG, "CGI: Error setting option! (%d)\n", err);
+			return err;
+		}
+	} else if (strcmp(header, "SetUndistortActive") == 0) {
+		char * key, * value;
+		bool active;
+
+		getArgument(&key, &value);
+
+		if (strcmp(key, "active") == 0)
+			active = strcmp(value, "true") == 0;
+
+		err = OscIpcSetParam(cgi.ipcChan, &active, SET_UNDISTORT_ACTIVE, sizeof active);
 		if (err != SUCCESS)
 		{
 			OscLog(DEBUG, "CGI: Error setting option! (%d)\n", err);

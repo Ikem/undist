@@ -30,11 +30,9 @@ int dummy; // FIXME: May be removed
 enum EnIpcParamIds
 {
 	GET_APP_STATE,
-	GET_COLOR_IMG,
-	GET_RAW_IMG,
-	SET_CAPTURE_MODE,
 	GO_TO_LIVE_VIEW_MODE,
-	GO_TO_CALIBRATION_MODE
+	GO_TO_CALIBRATION_MODE,
+	SET_UNDISTORT_ACTIVE
 };
 
 /*! @brief The path of the unix domain socket used for IPC between the application and its user interface. */
