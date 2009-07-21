@@ -75,8 +75,8 @@ endif
 ARS_host := $(ARS_host).a
 ARS_target := $(ARS_target).a
 
-ARS_host += ../opencv-1.1.0-host/cv/src/.libs/libcv.a ../opencv-1.1.0-host/cxcore/src/.libs/libcxcore.a ../opencv-1.1.0-host/cvaux/src/.libs/libcvaux.a
-ARS_target += ../opencv-1.1.0/cv/src/.libs/libcv.a ../opencv-1.1.0/cxcore/src/.libs/libcxcore.a ../opencv-1.1.0/cvaux/src/.libs/libcvaux.a
+ARS_host += opencv-1.1.0/library/host/libcv.a opencv-1.1.0/library/host/libcxcore.a opencv-1.1.0/library/host/libcvaux.a
+ARS_target += opencv-1.1.0/library/target/libcv.a opencv-1.1.0/library/target/libcxcore.a opencv-1.1.0/library/target/libcvaux.a
 
 LIBS_host := m pthread
 LIBS_target := m bfdsp pthread
@@ -106,6 +106,9 @@ endif
 
 oscar/%:
 	$(MAKE) -C oscar $*
+
+opencv-1.1.0/%:
+	cd opencv-1.1.0 && ./do-build
 
 # Including depency files and optional local Makefile.
 -include $(shell find build -name *.d)

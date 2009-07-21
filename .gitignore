@@ -15,7 +15,6 @@ osc_simlog
 
 # files used by the build system
 /build
-/oscar
 /.config
 
 # eclipse
