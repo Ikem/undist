@@ -1,0 +1,6 @@
+[submodule "oscar"]
+	path = oscar
+	url = http://github.com/scs/oscar.git
+[submodule "opencv-1.1.0"]
+	path = opencv-1.1.0
+	url = ../opencv-1.1.0.git
