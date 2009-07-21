@@ -59,7 +59,7 @@ CC_cpp_host = g++ -std=gnu++98 $(CFLAGS_host)
 CC_cpp_target = bfin-uclinux-g++ -std=gnu++98 $(CFLAGS_target)
 
 LD_host := gcc -fPIC
-LD_target := bfin-uclinux-gcc -elf2flt="-s 1048576"
+LD_target := bfin-uclinux-gcc -elf2flt="-s 3145728"
 
 APPS := $(patsubst SOURCES_%, %, $(filter SOURCES_%, $(.VARIABLES)))
 
