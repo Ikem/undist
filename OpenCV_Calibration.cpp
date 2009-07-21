@@ -20,6 +20,8 @@
 #include <stdlib.h>
 #include <iostream>
 #include <unistd.h>
+//#include "sht.h"
+#include <errno.h>
 
 #define BENCHMARK
 
@@ -41,6 +43,34 @@
 #endif /* BENCHMARK */
 
 
+//Definitions used by UndistortChunk--------------------------------------------------------------------
+/*! @brief The number of chunks needed to compute the patch. */
+#define PATCH_CHUNKS 4
+/*! @brief The number of rows in a chunk of the patch. */
+#define PATCH_CHUNK_ROWS 32
+/*! @brief Shift corresponding to the maximum scaling factor of the
+ * sobel filter. */
+#define SOBEL_SHIFT 3
+
+/*! @brief The maximum size of a chunk right before sobel filtering. */
+#define SOBEL_MAX_CHUNK_SIZE 8192
+
+/*! @brief The weight (in bits) the bilinear interpolation contributes
+ * to the precision of the output. */
+#define INTERP_WEIGHT 8
+/*! @brief The weight (in bits) the input pixel values contribute
+ * to the precision of the output. */
+#define PIXEL_WEIGHT 8
+/*! @brief The number of bits the interpolation scaling factors are
+ * shifted. */
+#define SCALE_SHIFT (2*INTERP_PRECISION - INTERP_WEIGHT)
+/*! @brief The number of bits the interpolation scaling factors are
+ * shifted. Actually -13, but -14 is more realistic in a typical image.
+ * Even -15 would still work. */
+#define INTERP_SHIFT (PIXEL_WEIGHT \
+        + INTERP_WEIGHT \
+        - (16 - SOBEL_SHIFT))
+//------------------------------------------------------------------------------------------------------
 
 using namespace std;
 
@@ -85,8 +115,8 @@ void createUndistFile(const char* directory, IplImage* mapx, IplImage* mapy )
 				undist[dst] = (uint16) (valx * (65536 / 1024));
 				undist[dst + 1] = (uint16) (valy * (65536 / 1024));
 			} else {
-				undist[dst] = (uint16) -1;
-				undist[dst + 1] = (uint16) -1;
+				undist[dst] = (uint16) 0;
+				undist[dst + 1] = (uint16) 0;
 			}
 			//printf("%d/%d: %f -> %d\n", row, pix, ptr[pix], (uint16)(ptr[pix]*65536/1024));
 		}
@@ -97,6 +127,234 @@ void createUndistFile(const char* directory, IplImage* mapx, IplImage* mapy )
 	fwrite(resolution, sizeof(uint32), 2, file);
 	fwrite(undist, sizeof(uint16), (mapx->width*mapx->height)*2, file);
 	fclose(file); // close file
+}
+
+
+inline void UndistortChunk(uint8 *pOut,
+			   const uint8 *u8DistImage,
+			   const uint16 distWidth,
+			   const struct VEC_2D *pInterp,
+//			   const fract16 *mapX,					// ?
+			   const uint16 interpWidth,
+			   const struct IMG_RECT *pUndistRect,
+			   const int16 xOff,
+			   const int16 yOff,
+			   const bool bShiftForSobel)
+{
+    uint16              pix, row;
+    uint16              lowX, highX, lowY, highY;
+    uint16              xHighScale, xLowScale, yHighScale, yLowScale;
+    uint16              llScale, lrScale, hlScale, hrScale;
+    /* The values in the four corners of the pixel to be interpolated. */
+    int16               llVal, lrVal, hlVal, hrVal;
+    uint16              undistYModify;
+    uint16              interpShift = INTERP_SHIFT - INTERP_BOOST;
+    int32               pixValue;
+
+    if(bShiftForSobel == FALSE)
+    {
+        interpShift = 0;
+    }
+
+    /* To switch from the end of one line to the beginning of the
+     * next one in the interpolation matrix, one needs to
+     * skip all the unwanted entries. */
+    undistYModify = interpWidth - pUndistRect->width;
+
+    PREFETCH(pInterp);
+    /* First, undistort a whole chunk row by row. */
+    for(row = 0; row < pUndistRect->height; row++)
+    {
+        /* The actual undistortion is a bilinear interpolation
+         * of the 4 pixels surrounding the subpixel
+         * source coordinate in the distorted image. */
+        for(pix = 0; pix < pUndistRect->width; pix++)
+        {
+            PREFETCH_NEXT(pInterp);
+            lowX = (pInterp->x >> INTERP_PRECISION) + xOff;
+            highX = lowX + 1;
+            lowY = (pInterp->y >> INTERP_PRECISION) + yOff;
+            highY = lowY + 1;
+
+            /********************************************************
+             *          hlVal O--------------------O hrVal
+             *                -                    -
+             *                -            X       -
+             *                -                    -
+             *                -                    -
+             *                -                    -
+             *                -                    -
+             *          llVal O--------------------O lrVal
+             * *****************************************************/
+            /* Get the values of the four corners, shift them in the
+             * right position for optimal precision and center them
+             * around zero (Convert to signed without loss of
+             * precision). */
+            /* ############ Precision: 8 bit signed. ############ */
+            llVal =
+                ((int16)u8DistImage[lowY*distWidth + lowX] - 0x7F);
+
+            lrVal =
+                ((int16)u8DistImage[lowY*distWidth + highX] - 0x7F);
+
+            hlVal =
+                ((int16)u8DistImage[highY*distWidth + lowX] - 0x7F);
+
+            hrVal =
+                ((int16)u8DistImage[highY*distWidth + highX] - 0x7F);
+
+            /* Valid bits: INTERP_PRECISION_MASK     */
+            xHighScale = INTERP_PRECISION_MASK & pInterp->x;
+            xLowScale = INTERP_PRECISION_MASK & ~(pInterp->x);
+            yHighScale = INTERP_PRECISION_MASK & pInterp->y;
+            yLowScale = INTERP_PRECISION_MASK & ~(pInterp->y);
+
+            /* Valid bits: 2xINTERP_PRECISION_MASK
+             *           - SCALE_SHIFT.                      */
+            llScale = (xLowScale * yLowScale) >> SCALE_SHIFT;
+            lrScale = (xHighScale * yLowScale) >> SCALE_SHIFT;
+            hlScale = (xLowScale * yHighScale) >> SCALE_SHIFT;
+            hrScale = (xHighScale * yHighScale) >> SCALE_SHIFT;
+
+            /*! @todo Optimization: Replace multiplications with
+             * additions.
+             * (Use relationship of high/low scale)
+             * */
+
+             /* Valid bits:
+             *             12 2xINTERP_PRECISION_MASK (scale)
+             *           - 4 SCALE_SHIFT (scale)
+             *           + 8 bit signed (Val)
+             *           - 3/0 INTERP_SHIFT
+             * ---------------------------------------------
+             *           = 13/16 bit signed                    */
+            pixValue =
+                ((int32)((fract16)llScale * llVal)) +
+                ((int32)((fract16)lrScale * lrVal)) +
+                ((int32)((fract16)hlScale * hlVal)) +
+                ((int32)((fract16)hrScale * hrVal));
+
+            /* Shift down and saturate the result. */
+            pixValue >>= interpShift;
+            SATURATE_LOW_WORD(pixValue);
+            *pOut++ = (uint8)(((fract16)pixValue) >> 8) ^ (1 << 7);
+
+            pInterp++;
+        }
+        pInterp += undistYModify;
+        PREFETCH(pInterp);
+    }
+}
+
+
+/*********************************************************************//*!
+ * @brief Load the undistortion matrix from file.
+ *
+ * @param strUndistFN File name of the undistortion matrix file.
+ * @return SUCCESS or an appropriate error code.
+ *//*********************************************************************/
+OSC_ERR LoadUndistortionInfo(const char strUndistFN[])
+{
+    FILE                *pUndistF;
+    int                 boundRect[4], mSize[2], n;
+    float               res[2];
+    uint32              matrixSize;
+    struct UNDIST_INTERP_INFO *pUndist = &pSht->undist;
+    struct IMG_RECT     *pBoundRect = &pSht->undist.boundRect;
+
+    pUndistF = fopen(strUndistFN, "rb");
+    if(pUndistF == NULL)
+    {
+        OscLog(ERROR, "%s: Unable to open undistortion matrix file (%s)! "
+                "%s.\n", __func__, strUndistFN, strerror(errno));
+        return -EUNABLE_TO_OPEN_FILE;
+    }
+
+    /* File format:
+     *
+     * <----------- 16 Bytes ---------->
+     * ---------------------------------
+     * |         Bounding rectangle    |
+     * | xPos  | yPos  | width | height|
+     * |-------------------------------|
+     * |Matrix size    | Resolution    |
+     * |width  | height|   X   | Y     |
+     * |-------------------------------|
+     * | X0 Y0 | X1 Y1 | X2 Y2 | X3 Y3 |
+     * |-------------------------------|
+     * | ............................. |
+     *
+     */
+
+    /* Read in the bounding rectangle of the undistortion matrix.*/
+    n = fread(boundRect, sizeof(int), 4, pUndistF);
+    if(n == 4)
+    {
+        pBoundRect->xPos = (uint16)boundRect[0];
+        pBoundRect->yPos = (uint16)boundRect[1];
+        if((boundRect[2] % 2) == 1)
+        {
+            /* Can only read out an even width from the camera sensor. */
+            pBoundRect->width = (uint16)boundRect[2] + 1;
+        } else {
+            pBoundRect->width = (uint16)boundRect[2];
+        }
+        pBoundRect->height = (uint16)boundRect[3];
+    } else {
+        goto fread_err;
+    }
+
+    /* Read in the size of the undistortion matrix */
+    n = fread(mSize, sizeof(int), 2, pUndistF);
+    if(n == 2)
+    {
+        pUndist->undistWidth = (uint16)mSize[0];
+        pUndist->undistHeight = (uint16)mSize[1];
+	pUndist->undistRect.width = pUndist->undistWidth;
+	pUndist->undistRect.height = pUndist->undistHeight;
+	pUndist->undistRect.xPos = pUndist->undistRect.yPos = 0;
+    } else {
+        goto fread_err;
+    }
+
+    /* Read in the resolution information. (mm/px) */
+    n = fread(res, sizeof(float), 2, pUndistF);
+    if(n == 2)
+    {
+        pUndist->resX = res[0];
+        pUndist->resY = res[1];
+    } else {
+        goto fread_err;
+    }
+    matrixSize = pUndist->undistWidth*pUndist->undistHeight;
+    OscLog(DEBUG, "%s: Reading in undistortion matrix %s (%dx%d)...\n"
+            " Bounding rectangle is (%dx%d) @ %d/%d. ",
+            __func__, strUndistFN,
+            pUndist->undistWidth, pUndist->undistHeight,
+            pBoundRect->width, pBoundRect->height,
+            pBoundRect->xPos, pBoundRect->yPos);
+
+    /* Read in the actual undistortion data. For each undistorted
+     * pixel we need the subpixel source coordinates in the raw image.
+     * For greater efficiency the X and Y coordinates are stored together
+     * as 2x16bit. */
+    n = fread(pUndist->u2x16UndistInterpMatrix,
+            2*sizeof(uint16),
+            matrixSize,
+            pUndistF);
+
+    if(n != matrixSize)
+    {
+        goto fread_err;
+    }
+
+    OscLog(DEBUG, "done.\n");
+    return SUCCESS;
+
+fread_err:
+        OscLog(ERROR, "%s: File read error from file %s!\n",
+                __func__, strUndistFN);
+        return -EFILE_ERROR;
 }
 
 
@@ -258,7 +516,7 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 
 
 	calib.corners = new CvPoint2D32f[ board_n ];
-	calib.corner_count;
+//	calib.corner_count;
 	int successes = 0;
 	int step, frame = 0;
 
@@ -473,18 +731,65 @@ struct CV_UNDISTORT cmCalibrateUndistort(struct CV_CALIBRATION calib, IplImage *
         undist.mapy
         );
 
+
+	for (int row=0, dst=0; row < (undist.mapx->height); row += 1) {
+		float * ptrx = (float*) (undist.mapx->imageData + row * undist.mapx->widthStep);
+		float * ptry = (float*) (undist.mapy->imageData + row * undist.mapy->widthStep);
+		for (int pix = 0; pix < undist.mapx->width; pix += 1, dst += 1){
+			float valx = ptrx[pix];
+			float valy = ptry[pix];
+
+			if (!(0 < valx && valx <= 752 && 0 < valy && valy <= 480)) {
+				valx = (uint16) 0;
+				valy = (uint16) 0;
+			}
+
+			pSht->undist.u2x16UndistInterpMatrix[dst].x = (uint16) (valx * (65536 / 1024));
+			pSht->undist.u2x16UndistInterpMatrix[dst].y = (uint16) (valy * (65536 / 1024));
+			//printf("%d/%d: %f -> %d\n", row, pix, ptr[pix], (uint16)(ptr[pix]*65536/1024));
+		}
+	}
+/*
+	for (int i=0; i<cvGetSize(image); i++ ) {
+		undist.pInterp[i].x = OscDsplFloatToFr16(GetPixel(undist.mapx[i]))/1024;
+		undist.pInterp[i].y = OscDsplFloatToFr16(GetPixel(undist.mapy[i]))/1024;
+	}
+*/
     return undist;
 }
 
 IplImage* cmUndistort(struct CV_UNDISTORT undist, IplImage * image)
 {
+	mark();
+	IplImage *image_new = cvCloneImage(image);
+	mark();
     if(image) {
-    	IplImage *t = cvCloneImage(image);
-        cvRemap( t, image, undist.mapx, undist.mapy );     // Undistort image
-        cvReleaseImage(&t);
+#ifdef USE_OPTIMIZED_UNDISTORT
+
+    	mark();
+    	struct IMG_RECT undistRect;
+    	undistRect.width = (uint16)image->width;
+    	undistRect.height = (uint16)image->height;
+    	undistRect.xPos = 0;
+    	undistRect.yPos = 0;
+
+    	UndistortChunk((uint8*)image_new->imageData,
+    				   (uint8*)image->imageData,
+    				   image->width,
+    				   pSht->undist.u2x16UndistInterpMatrix,		// undist.pInterp,
+    				   image->width,								// Grösse ?
+    				   &undistRect,					// pUndistRect,
+    				   0,
+    				   0,
+    				   false);
+    	mark();
+#else
+        cvRemap( image, image_new, undist.mapx, undist.mapy );     // Undistort image
+#endif
+     //   cvReleaseImage(&t);
         //image = cvQueryFrame( capture );
     }
-    return image;
+    return image_new;
 }
 
 
@@ -547,8 +852,6 @@ IplImage* cmPerspectiveTransform(struct CV_PERSPECTIVE persp, IplImage* image)
 
 	return birds_image;
 }
-
-
 
 
 

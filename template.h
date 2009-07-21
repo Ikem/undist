@@ -28,6 +28,8 @@
 #include "template_ipc.h"
 #include <stdio.h>
 
+#define mark() printf("%s: %s(): Line %d\n", __FILE__, __FUNCTION__, __LINE__)
+
 /*--------------------------- Settings ------------------------------*/
 /*! @brief The number of frame buffers used. */
 #define NR_FRAME_BUFFERS 2

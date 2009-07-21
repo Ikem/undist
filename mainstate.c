@@ -29,6 +29,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+// For optimized undistortion function.
+struct SHT Sht;
+struct SHT * pSht;
+
 // Global image structure used with StateMachine
 struct {
 	IplImage *original, *calibrated, *undistort, *lvundist;
@@ -93,6 +97,9 @@ Msg const *MainState_LiveViewMode(MainState *me, Msg *msg)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State LiveViewMode!\n");
+		// Remove live images form web interface
+		unlink(IMAGE_DIRECTORY "original.bmp");
+		unlink(IMAGE_DIRECTORY "lvundist.bmp");
 		data.ipc.state.appMode = appMode_LiveViewMode;
 		return 0;
 	case GO_TO_CALIBRATION_EVT:
@@ -132,6 +139,8 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 {
 	const char* undistortFile = IMAGE_DIRECTORY "lvundist.bmp";
 	const char* showFile = IMAGE_DIRECTORY "original.bmp";
+	const char* udFile = "undist.ud";
+
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
@@ -144,21 +153,31 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 		{
 			printf("Line %d\n", __LINE__);
 			undist = cmCalibrateUndistort(calib, image.original);
+			//LoadUndistortionInfo(udFile);
 		}
 
 		return 0;
 	case IMG_SEQ_EVT:
+		mark();
 		captureImage(image.original);
+		mark();
 		writeImage(showFile, image.original);
+		mark();
 		if(persp.undistort)
 		{
-			printf("Line %d\n", __LINE__);
+			printf("%p\n", image.lvundist);
+			if (image.lvundist != NULL)
+				cvReleaseImage(&image.lvundist);
+			mark();
 			image.lvundist = cmUndistort(undist, image.original);
+			mark();
 			if(persp.perspTransform)
 			{
+				mark();
 				image.lvundist = cmPerspectiveTransform(persp, image.lvundist);
 			}
 			writeImage(undistortFile, image.lvundist);
+			mark();
 		}
 		return 0;
 	}
@@ -203,6 +222,18 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 				OscLog(ERROR, "wrong input parameters x, y\n");
 			}
 		return 0;
+	case CALIBRATE_CAMERA_EVT:
+		OscLog(INFO, "Enter in State CalibrateCamera!\n");
+		calib = cmCalibrateCamera(calib.n_boards, calib.board_w, calib.board_h, image.original);
+		image.calibrated = cmDrawChessboardCorners(image.original, calib);
+		undist = cmCalibrateUndistort(calib, image.original);
+		if(calib.corners_found){
+				// Save calibrated image
+				writeImage(calibFile, image.calibrated);
+			} else {
+				OscLog(ERROR, "wrong input parameters x, y\n");
+			}
+		return 0;
 	case UNDISTORT_GRID_EVT:
 		OscLog(INFO, "UNDISTORT_GRID_EVT\n");
 		STATE_TRAN(me, &me->UndistortGridAndShow);
@@ -214,10 +245,19 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 {
 	const char* undistFile = IMAGE_DIRECTORY "undistorted.bmp";
+	const char* udFile = "undist.ud";
+
 	switch (msg->evt)
 	{
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State UndistortGridAndShow!\n");
+	case UNDISTORT_GRID_EVT:
+	//	createUndistFile(udFile, undist.mapx, undist.mapy);			// Optimized
+	//	LoadUndistortionInfo(udFile);								// Optimized
+		printf("image.undistort: %p\n", image.undistort);
+
+		if (image.undistort != NULL)
+			cvReleaseImage(&image.undistort);
 		image.undistort = cmUndistort(undist, image.original);
 		// Save undistorted image
 		writeImage(undistFile, image.undistort);
@@ -410,6 +450,7 @@ static OSC_ERR HandleIpcRequests(MainState *pMainState)
 OSC_ERR StateControl( void)
 {
 	//OscHsmCreate( data.hFramework);
+	pSht = &Sht;
 
 	image.lvundist = cvCreateImage(cvSize(OSC_CAM_MAX_IMAGE_WIDTH, OSC_CAM_MAX_IMAGE_HEIGHT), IPL_DEPTH_8U, 1);	// Initialize image 752,480
 	image.original = cvCreateImage(cvSize(OSC_CAM_MAX_IMAGE_WIDTH, OSC_CAM_MAX_IMAGE_HEIGHT), IPL_DEPTH_8U, 1);	// Initialize image 752,480

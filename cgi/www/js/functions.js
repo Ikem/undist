@@ -167,7 +167,7 @@ var ajaxQueue = {
 			data: data,
 			success2: onLoad,
 			error2: onError,
-			timeout: 120000,
+			timeout: 300000,
 			type: "POST",
 			url: appURL + "/cgi-bin/cgi"
 		};
