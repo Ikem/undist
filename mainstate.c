@@ -124,12 +124,23 @@ Msg const *MainState_CalibrationMode(MainState *me, Msg *msg)
 		return 0;
 	case GO_TO_LIVE_VIEW_EVT:
 		OscLog(INFO, "GO_TO_LIVE_VIEW_EVT\n");
-		persp.undistort = false;
 		STATE_TRAN(me, &me->ShowCameraImage);
 		return 0;
 	case GET_NEW_GRID_EVT:
 		OscLog(INFO, "GET_NEW_GRID_EVT\n");
 		STATE_TRAN(me, &me->WaitForGrid);
+		return 0;
+	case CALIBRATE_CAMERA_EVT:
+		OscLog(INFO, "CALIBRATE_CAMERA_EVT\n");
+		STATE_TRAN(me, &me->CalibrateCamera);
+		return 0;
+	case UNDISTORT_GRID_EVT:
+		OscLog(INFO, "UNDISTORT_GRID_EVT\n");
+		STATE_TRAN(me, &me->UndistortGridAndShow);
+		return 0;
+	case SAVE_MODEL_CONFIG_EVT:
+		saveConfig(persp);
+		saveModel(calib);
 		return 0;
 	}
 	return msg;
@@ -146,14 +157,18 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State ShowCameraImage!\n");
 		captureImage(image.original);
+		printf("Undistort: %d\n", persp.undistort);
 		calib = loadModel();
 		persp = loadConfig();
+		printf("Undistort: %d\n", persp.undistort);
+		printf("perspTransform: %d\n", persp.perspTransform);
 		writeImage(showFile, image.original);
 		if(persp.undistort)
 		{
 			printf("Line %d\n", __LINE__);
 			undist = cmCalibrateUndistort(calib, image.original);
-			//LoadUndistortionInfo(udFile);
+			persp.undistort = false;
+			//LoadUndistortionInfo(udFile);						// used with undistortion file undist.ud
 		}
 
 		return 0;
@@ -171,6 +186,7 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 			mark();
 			image.lvundist = cmUndistort(undist, image.original);
 			mark();
+			printf("perspTransform: %d\n", persp.perspTransform);
 			if(persp.perspTransform)
 			{
 				mark();
@@ -179,6 +195,7 @@ Msg const *MainState_ShowCameraImage(MainState *me, Msg *msg)
 			writeImage(undistortFile, image.lvundist);
 			mark();
 		}
+
 		return 0;
 	}
 	return msg;
@@ -213,13 +230,14 @@ Msg const *MainState_CalibrateCamera(MainState *me, Msg *msg)
 	case ENTRY_EVT:
 		OscLog(INFO, "Enter in State CalibrateCamera!\n");
 		calib = cmCalibrateCamera(calib.n_boards, calib.board_w, calib.board_h, image.original);
-		image.calibrated = cmDrawChessboardCorners(image.original, calib);
-		undist = cmCalibrateUndistort(calib, image.original);
 		if(calib.corners_found){
+				image.calibrated = cmDrawChessboardCorners(image.original, calib);
+				undist = cmCalibrateUndistort(calib, image.original);
 				// Save calibrated image
 				writeImage(calibFile, image.calibrated);
 			} else {
 				OscLog(ERROR, "wrong input parameters x, y\n");
+				writeImage(calibFile, image.original);
 			}
 		return 0;
 	case CALIBRATE_CAMERA_EVT:
@@ -264,6 +282,7 @@ Msg const *MainState_UndistortGridAndShow(MainState *me, Msg *msg)
 		persp = cmCalculatePerspectiveTransform(calib, persp.Z, persp.perspTransform);
 		if(persp.perspTransform)
 		{
+			mark();
 			image.undistort = cmPerspectiveTransform(persp, image.undistort);
 			// Save birds_eye image
 			writeImage(undistFile, image.undistort);

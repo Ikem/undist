@@ -136,13 +136,7 @@ static OSC_ERR init(const int argc, const char * argv[])
 		goto ipc_err;
 	}
 
-	err |= OscCamPerspectiveStr2Enum("DEFAULT", &data.perspective);
-	if ( err != SUCCESS)
-	{
-		OscLog(ERROR, "%s: Invalid camera perspective.\n", __func__);
-		goto per_err;
-	}
-	OscCamSetupPerspective( data.perspective);
+	OscCamSetupPerspective(OSC_CAM_PERSPECTIVE_180DEG_ROTATE);
 
 	return SUCCESS;
 

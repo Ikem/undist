@@ -519,7 +519,7 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 //	calib.corner_count;
 	int successes = 0;
 	int step, frame = 0;
-
+mark();
 
 //	IplImage *gray_image = cvCreateImage(cvGetSize(image),IPL_DEPTH_8U,1);	//subpixel
 
@@ -539,10 +539,9 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
            cvFindCornerSubPix(image, calib.corners, calib.corner_count,
 					  cvSize(11,11),cvSize(-1,-1), cvTermCriteria(
 					  CV_TERMCRIT_EPS+CV_TERMCRIT_ITER, 30, 0.1 ));
-
-
-		   // If we got a good board, add it to our data
-		   if( calib.corner_count == board_n ) {
+mark();
+			// If we got a good board, add it to our data
+			if( calib.corner_count == board_n ) {
 			  step = successes*board_n;
 			  for( int i=step, j=0; j<board_n; ++i,++j ) {
 				 CV_MAT_ELEM(*image_points, float,i,0) = calib.corners[j].x;
@@ -553,10 +552,16 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 			  }
 			  CV_MAT_ELEM(*point_counts, int,successes,0) = board_n;
 			  successes++;
-		   }
+			}
+			else {
+				printf("corners_found: %d\tCorner detection failed.\n", calib.corners_found);
+				successes++;
+			}
 		} //end skip board_dt between chessboard capture
 	} //END COLLECTION WHILE LOOP.
-
+mark();
+	if(calib.corners_found > 0)
+	{
     // ALLOCATE MATRICES ACCORDING TO HOW MANY CHESSBOARDS FOUND
     CvMat* object_points2  = cvCreateMat(successes*board_n,3,CV_32FC1);
     CvMat* image_points2   = cvCreateMat(successes*board_n,2,CV_32FC1);
@@ -610,7 +615,7 @@ struct CV_CALIBRATION cmCalibrateCamera(int n_boards, int board_w, int board_h, 
 		calib.intrinsic_matrix, calib.distortion_coeffs,
 		NULL, NULL,0  //CV_CALIB_FIX_ASPECT_RATIO
 		);
-
+	}
 	return calib;
 }
 
@@ -655,6 +660,7 @@ void saveConfig (struct CV_PERSPECTIVE persp)
 	key.strSection = NULL;
 	key.strTag = "perspTransform";
 
+	printf("perspTransform: %d\n", persp.perspTransform);
 	OscCfgSetBool(hCfgHandle, &key, persp.perspTransform );
 	OscCfgFlushContent(hCfgHandle);
 
@@ -749,12 +755,7 @@ struct CV_UNDISTORT cmCalibrateUndistort(struct CV_CALIBRATION calib, IplImage *
 			//printf("%d/%d: %f -> %d\n", row, pix, ptr[pix], (uint16)(ptr[pix]*65536/1024));
 		}
 	}
-/*
-	for (int i=0; i<cvGetSize(image); i++ ) {
-		undist.pInterp[i].x = OscDsplFloatToFr16(GetPixel(undist.mapx[i]))/1024;
-		undist.pInterp[i].y = OscDsplFloatToFr16(GetPixel(undist.mapy[i]))/1024;
-	}
-*/
+
     return undist;
 }
 
